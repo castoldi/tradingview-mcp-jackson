@@ -1,0 +1,52 @@
+// SPX500 ORB-15 — Pine v6 indicator (currently live on chart)
+// Toby Crabel-style opening range breakout. First 15 min (8:30-8:44 CT) defines the
+// range; first close beyond range high/low after 8:45 CT triggers a single trade
+// for the day. Window: 8:45-10:30 CT.
+
+//@version=6
+indicator("SPX500 ORB 15", overlay=false)
+
+atr = ta.atr(14)
+
+in_range = not na(time("3", "0830-0845:23456", "America/Chicago"))
+in_breakout_window = not na(time("3", "0845-1030:23456", "America/Chicago"))
+
+var float or_high = na
+var float or_low = na
+var bool range_locked = false
+var bool any_trade_today = false
+
+new_day = ta.change(time("D")) != 0
+if new_day
+    or_high := na
+    or_low := na
+    range_locked := false
+    any_trade_today := false
+
+if in_range
+    or_high := na(or_high) ? high : math.max(or_high, high)
+    or_low  := na(or_low)  ? low  : math.min(or_low,  low)
+    range_locked := false
+else if not range_locked and not na(or_high)
+    range_locked := true
+
+signal = 0.0
+if range_locked and in_breakout_window and not any_trade_today and not na(or_high) and not na(or_low)
+    if close > or_high
+        signal := 1.0
+        any_trade_today := true
+    else if close < or_low
+        signal := -1.0
+        any_trade_today := true
+
+range_height = na(or_high) or na(or_low) ? na : or_high - or_low
+
+plot(signal, "Signal", color=color.orange, linewidth=3, style=plot.style_histogram)
+hline(0, color=color.gray)
+hline(1, "Long", color=color.new(color.green, 50), linestyle=hline.style_dashed)
+hline(-1, "Short", color=color.new(color.red, 50), linestyle=hline.style_dashed)
+
+plot(or_high, "OR_high", display=display.data_window)
+plot(or_low, "OR_low", display=display.data_window)
+plot(range_height, "Range_height", display=display.data_window)
+plot(atr, "ATR_ORB", display=display.data_window)

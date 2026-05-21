@@ -92,7 +92,7 @@ const placeOrderJs = `
   // 4. Locate the price-related text inputs.
   // After Market + both exits enabled: inputs are [qty, tp_price, sl_price] in DOM order.
   // We'll be defensive: re-query and pick by surrounding label text where possible.
-  const textInputs = Array.from(panel.querySelectorAll('input[type="text"]'));
+  const textInputs = Array.from(panel.querySelectorAll('input')).filter(i => i.type === 'text');
 
   // Helper: find input whose nearest preceding label/text contains a keyword
   function findInputByLabel(keywords) {

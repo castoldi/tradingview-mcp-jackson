@@ -150,11 +150,13 @@ Run these steps in order every time:
 3. `layout_switch name: "AUGUSTO"` → load the trading layout
 4. `chart_set_symbol symbol: "OANDA:SPX500USD"` → ensure SPX500 is active
 5. `chart_set_timeframe` → confirm 3m (only set if different)
-6. Create four cron jobs (local CT time, Mon–Fri):
-   - **EMA Bounce Scalper**: `CronCreate cron: "*/3 8-14 * * 1-5"` (execute trade signals every 3 min)
+6. Create cron jobs (local CT time, Mon–Fri):
+   - **ORB-15 (only active strategy)**: `CronCreate cron: "*/3 8-10 * * 1-5"` (8:30-8:44 forms range, signals fire 8:45-10:30 CT, one trade/day max)
    - **Market Close**: `CronCreate cron: "30 14 * * 1-5"` (close all SPX500 positions at 2:30 PM CT)
    - **Noon Summary**: `CronCreate cron: "0 12 * * 1-5"` (email trading summary)
    - **EOD Summary**: `CronCreate cron: "0 15 * * 1-5"` (email trading summary)
+   - EMA Bounce Scalper retired 2026-05-21 (0/4 WR).
+   - EMA200 Touch indicator accidentally overwritten 2026-05-21 PM during ORB pine_new flow; cron deleted. Restore via Pine UI Save-As if needed.
    - User is in **St. Louis, CT — CDT (UTC-5) in summer, CST (UTC-6) in winter**
    - Cron uses local time so DST is handled automatically — the expression never needs to change between seasons
 7. Report the four new cron job IDs and confirm all systems are live
@@ -222,9 +224,9 @@ Each cron tick that produces a signal must run TWO scripts in order:
 | Broker | Paper Trading |
 | Account | accastoldi USD (~$99,929 balance) |
 | Active symbol | OANDA:SPX500USD, 3m |
-| Indicators | "SPX500 EMA Bounce Scalper" (only indicator) |
+| Indicators | "SPX500 ORB 15" (sole indicator as of 2026-05-21 PM; EMA200 Touch script was accidentally overwritten and pine_new doesn't support Save-As) |
 | Trading hours | 8:00 AM - 2:30 PM CT (close all positions by 2:30 PM CT mandatory) |
-| Active cron loops | Single EMA Bounce Scalper strategy + market close + summaries |
+| Active cron loops | ORB-15 only + market close + summaries |
 
 ### SPX500 EMA Bounce Scalper — strategy rules (CURRENT ACTIVE STRATEGY)
 **Status**: ✓ LIVE (replaced EMA Crossover & RSI Momentum Reversal on 2026-05-20)
@@ -236,11 +238,12 @@ Each cron tick that produces a signal must run TWO scripts in order:
   - **SELL signal**: (price crosses below EMA21) OR (EMA21 touched in last 3 bars AND close < EMA21 AND close < prev close) — must have EMA8 ≤ EMA21 (short-term down momentum)
   - **Updated 2026-05-21**: Replaced EMA200 trend filter with EMA8 short-term momentum filter, added bounce detection alongside crossovers. Goal: 4-8× more signals per day.
 - **Stop Loss**: `EMA21 ± 1.5×ATR` — provides 6–8 pt cushion on normal volatility days
-  - Long SL: `EMA21 - 1.5×ATR` (read as `SL_long`)
-  - Short SL: `EMA21 + 1.5×ATR` (read as `SL_short`)
-- **Take Profit**: `close ± 0.75×ATR` — targets 4–5 pts on normal days
-  - Long TP: `close + 0.75×ATR` (read as `TP_long`)
-  - Short TP: `close - 0.75×ATR` (read as `TP_short`)
+  - Long SL: `EMA21 - 1.5×ATR` (computed in cron, NOT read from indicator's SL_long)
+  - Short SL: `EMA21 + 1.5×ATR` (computed in cron, NOT read from indicator's SL_short)
+- **Take Profit**: `entry ± 2.0×ATR` — R:R ~ 1.3 (fixed 2026-05-21; indicator's old TP fields had R:R 0.5 which was negative EV)
+  - Long TP: `entry + 2.0×ATR` (computed in cron)
+  - Short TP: `entry - 2.0×ATR` (computed in cron)
+- **Cron computes SL/TP** from indicator's EMA21 + ATR rather than using the indicator's old SL/TP fields, which still report 0.75×ATR TP (legacy)
 - **Signal output**: 1 = BUY, −1 = SELL, 0 = no signal (readable via `data_get_study_values`)
 - **Position size**: `min(round(100 / |entry − SL|), 5000)` units — risk-adjusted to $100 per trade
 - **Max risk per trade**: $100 (strict — never exceed)
@@ -260,16 +263,50 @@ Each cron tick that produces a signal must run TWO scripts in order:
 - **Always close Pine Editor** before trading: `ui_open_panel pine-editor close`
 - **Win rate target**: 65%+ on high-volatility days
 
-### Cron schedules (CURRENT — as of 2026-05-20)
+### SPX500 ORB-15 — sole strategy (added 2026-05-21 PM)
+- **Indicator**: "SPX500 ORB 15" (Pine Script, overlay=false histogram)
+- **Asset**: OANDA:SPX500USD, 3m
+- **Core Logic**: First 15 min (8:30-8:44 CT) of US cash session defines an opening range. After 8:45 CT, a close above range_high → BUY breakout, below range_low → SELL breakout. Single trade/day (indicator self-locks). Toby Crabel classic edge.
+- **Window**: signals only fire 8:45-10:30 CT (max one trade/day)
+- **Data window keys**: `Signal`, `OR_high`, `OR_low`, `Range_height`, `ATR_ORB`
+- **SL/TP**: SL = opposite side of range; TP = entry + 1.5×range_height (R:R 1.5)
+- **Position sizing**: same `min(round(100/|entry-SL|), 5000)` rule, max $100 risk
+- **Skip criteria**: SL distance not between 5-30 pts (range too tight or too wide)
+- **Why**: Best of the 10-strategy framework — rank #1 in beginner-friendliness AND automation, PF ~1.8, clear rules, single setup/day = no overtrading risk
+- **Expected**: 45-55% WR, ~1 trade/day, max ~$150 win or ~$100 loss
+- **Cron**: 8:00-10:59 CT, every 3 min (job `a29a8b45`)
+
+### SPX500 EMA200 Touch — RETIRED (overwritten 2026-05-21)
+- **Indicator**: "SPX500 EMA200 Touch" (Pine Script, separate pane)
+- **Asset**: OANDA:SPX500USD, 3m (same chart)
+- **Core Logic**: Trade EMA200 cross or bounce
+  - **BUY signal**: (price crosses above EMA200 OR EMA200 touched within 3 bars and close > EMA200 with positive momentum) AND EMA21 ≥ EMA200 (long-term uptrend)
+  - **SELL signal**: (price crosses below EMA200 OR EMA200 touched within 3 bars and close < EMA200 with negative momentum) AND EMA21 ≤ EMA200 (long-term downtrend)
+- **Stop Loss**: `EMA200 ± 2.0×ATR` (wider than EMA21 strategy — longer-horizon trade) — computed in cron
+- **Take Profit**: `entry ± 3.0×ATR` — R:R = 1.5 (fixed 2026-05-21; indicator's old TP_*_200 fields had R:R 0.75)
+- **Data window keys**: `Signal`, `SL_long_200`, `TP_long_200`, `SL_short_200`, `TP_short_200`, `ATR_200`, `EMA200_val_200`
+- **Position sizing & risk**: same formula — `min(round(100 / |entry-SL|), 5000)`, max $100 risk per trade
+- **Runs INDEPENDENTLY** of the EMA Bounce Scalper. Both may fire same bar → two separate positions.
+- **Why added**: On strong-trend days like 2026-05-21, the EMA21 scalper goes quiet because price doesn't pull back to EMA21. EMA200 sees price pull back less often but to a more meaningful S/R level, so it'll catch trades the scalper misses.
+
+### Cron schedules (CURRENT — as of 2026-05-21)
 **SPX500 EMA Bounce Scalper (Trade Execution):**
 - Expression: `*/3 8-14 * * 1-5` — every 3 min, Mon–Fri, 8:00–14:59 CT
-- Job ID: **5f51b4cd** (session-only — recreate on restart via "start trading bot")
-- Action: Read Signal from indicator, validate SL distance (5–30 pts), execute BUY/SELL with dynamic position sizing
-- Calls: `data_get_study_values` → validate → `node scripts/place-trade.js` → `node scripts/notify-trade.js`
+- Job ID: **0a5abfa7** (session-only — recreate on restart via "start trading bot")
+- **Time filter**: skip trades during 8:00–8:14 CT (open chop) and 12:00–12:44 CT (lunch)
+- Action: Check time → read Signal/EMA21/ATR + price → compute SL=EMA21±1.5×ATR, TP=entry±2.0×ATR (R:R 1.3) → validate SL 5–30 pts → place via place-trade.js → notify
+- Calls: `data_get_study_values` + `quote_get` → compute SL/TP → `node scripts/place-trade.js` → `node scripts/notify-trade.js`
+
+**SPX500 ORB-15 (Trade Execution):**
+- Expression: `*/3 8-10 * * 1-5` — every 3 min, Mon–Fri, 8:00–10:59 CT
+- Job ID: **a29a8b45** (session-only — recreate on restart via "start trading bot")
+- **Time gating**: indicator self-locks; only fires Signal between 8:45-10:30 CT, max one signal per day
+- Action: Check time (skip if hour=8 AND min<45 — range still forming) → read Signal/OR_high/OR_low/Range_height/ATR_ORB + price → compute SL=opposite range side, TP=entry±1.5×Range_height (R:R 1.5) → validate SL 5–30 pts → place via place-trade.js → notify
+- Sole active strategy as of 2026-05-21 PM
 
 **Market Close (daily):**
 - Expression: `30 14 * * 1-5` — 2:30 PM CT
-- Job ID: **ba1ca890** (session-only — recreate on restart via "start trading bot")
+- Job ID: **dd31053c** (session-only — recreate on restart via "start trading bot")
 - Action: Close all open SPX500USD positions at market, no new orders after this time
 - Reason: Avoid overnight gap risk (mandatory every trading day)
 

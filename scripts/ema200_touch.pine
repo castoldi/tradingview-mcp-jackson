@@ -1,0 +1,48 @@
+// SPX500 EMA200 Touch — Pine v6 indicator
+// To restore as a chart study:
+//   1. TradingView → Pine Editor → File → New Indicator
+//   2. Paste this code
+//   3. File → Save As...  (give it a NEW name like "SPX500 EMA200 Touch v3" so it
+//      doesn't collide with the existing slot that pine_new reuses)
+//   4. Click "Add to chart"
+//   5. Re-create the cron job using the v2 prompt with SL=EMA200±2.0×ATR, TP=entry±3.0×ATR
+//      (R:R 1.5)
+
+//@version=6
+indicator("SPX500 EMA200 Touch", overlay=false)
+
+// EMAs and ATR
+ema21 = ta.ema(close, 21)
+ema200 = ta.ema(close, 200)
+atr = ta.atr(14)
+
+// EMA200 cross
+cross_above_200 = ta.crossover(close, ema200)
+cross_below_200 = ta.crossunder(close, ema200)
+
+// EMA200 bounce — touched in last 3 bars, close back on right side with momentum
+touched_below = low <= ema200 or low[1] <= ema200 or low[2] <= ema200
+touched_above = high >= ema200 or high[1] >= ema200 or high[2] >= ema200
+bounce_up = touched_below and close > ema200 and close > close[1]
+bounce_down = touched_above and close < ema200 and close < close[1]
+
+// Longer-term trend filter using EMA21 vs EMA200
+trend_up = ema21 >= ema200
+trend_down = ema21 <= ema200
+
+// Signal: 1=BUY, -1=SELL, 0=no signal
+signal_200 = 0.0
+if (cross_above_200 or bounce_up) and trend_up
+    signal_200 := 1.0
+else if (cross_below_200 or bounce_down) and trend_down
+    signal_200 := -1.0
+
+// Visual signal histogram in its own pane
+plot(signal_200, "Signal", color=color.purple, linewidth=2, style=plot.style_histogram)
+hline(0, color=color.gray)
+hline(1, "Buy", color=color.new(color.green, 50), linestyle=hline.style_dashed)
+hline(-1, "Sell", color=color.new(color.red, 50), linestyle=hline.style_dashed)
+
+// Data window values for cron reads
+plot(atr, "ATR_200", display=display.data_window)
+plot(ema200, "EMA200_val_200", display=display.data_window)
