@@ -2,22 +2,46 @@
 
 This file is a step-by-step guide for Claude Code (or any LLM agent) to install and configure the TradingView MCP server. If a user asks you to install or set up this project, follow these steps exactly.
 
+## This machine (Windows 11, user: casto)
+
+Already installed at `C:\users\casto\tradingview-mcp-jackson`. Skip to Step 3.
+
+MCP config needed at: `C:\Users\casto\.claude\.mcp.json`
+TradingView launch: `& "$env:LOCALAPPDATA\TradingView\TradingView.exe" --remote-debugging-port=9222`
+
+---
+
 ## Step 1: Clone and Install
 
+**Mac/Linux:**
 ```bash
 git clone https://github.com/LewisWJackson/tradingview-mcp-jackson.git ~/tradingview-mcp-jackson
 cd ~/tradingview-mcp-jackson
 npm install
 ```
 
-If the user specifies a different install path, use that instead of `~/tradingview-mcp-jackson`.
+**Windows (PowerShell):**
+```powershell
+git clone https://github.com/LewisWJackson/tradingview-mcp-jackson.git C:\users\$env:USERNAME\tradingview-mcp-jackson
+cd C:\users\$env:USERNAME\tradingview-mcp-jackson
+npm install
+```
+
+If the user specifies a different install path, use that instead.
 
 ## Step 2: Set Up Rules
 
 Copy the example rules file and open it for the user to fill in:
 
+**Mac/Linux:**
 ```bash
 cp ~/tradingview-mcp-jackson/rules.example.json ~/tradingview-mcp-jackson/rules.json
+```
+
+**Windows (PowerShell):**
+```powershell
+Copy-Item C:\users\$env:USERNAME\tradingview-mcp-jackson\rules.example.json `
+          C:\users\$env:USERNAME\tradingview-mcp-jackson\rules.json
 ```
 
 Tell the user: "Open `rules.json` and fill in your watchlist (the symbols you trade), your bias criteria (what makes something bullish/bearish for you), and your risk rules. This is what the morning brief uses every day."
@@ -26,6 +50,7 @@ Tell the user: "Open `rules.json` and fill in your watchlist (the symbols you tr
 
 Add the server to the user's Claude Code MCP configuration. The config file is at `~/.claude/.mcp.json` (global) or `.mcp.json` (project-level).
 
+**Mac/Linux** (`~/.claude/.mcp.json`):
 ```json
 {
   "mcpServers": {
@@ -36,8 +61,20 @@ Add the server to the user's Claude Code MCP configuration. The config file is a
   }
 }
 ```
+Replace `YOUR_USERNAME`: run `echo $USER` to find it.
 
-Replace `YOUR_USERNAME` with the user's actual system username. Run `echo $USER` (Mac/Linux) or `echo %USERNAME%` (Windows) to find it.
+**Windows** (`C:\Users\casto\.claude\.mcp.json`):
+```json
+{
+  "mcpServers": {
+    "tradingview": {
+      "command": "node",
+      "args": ["C:\\users\\casto\\tradingview-mcp-jackson\\src\\server.js"]
+    }
+  }
+}
+```
+Use double backslashes in JSON paths on Windows. Run `$env:USERNAME` in PowerShell to confirm username.
 
 If the config file already exists and has other servers, merge the `tradingview` entry into the existing `mcpServers` object. Do not overwrite other servers.
 
@@ -55,8 +92,13 @@ Mac:
 /Applications/TradingView.app/Contents/MacOS/TradingView --remote-debugging-port=9222
 ```
 
-Windows:
-```bash
+Windows (PowerShell — use this on this machine):
+```powershell
+& "$env:LOCALAPPDATA\TradingView\TradingView.exe" --remote-debugging-port=9222
+```
+
+Windows (cmd.exe):
+```cmd
 %LOCALAPPDATA%\TradingView\TradingView.exe --remote-debugging-port=9222
 ```
 
@@ -103,8 +145,14 @@ To retrieve tomorrow: *"Get yesterday's session using session_get"*
 
 To use the `tv` CLI command globally:
 
+**Mac/Linux:**
 ```bash
-cd ~/tradingview-mcp-jackson
+cd ~/tradingview-mcp-jackson && npm link
+```
+
+**Windows (PowerShell — run as Administrator):**
+```powershell
+cd C:\users\casto\tradingview-mcp-jackson
 npm link
 ```
 
