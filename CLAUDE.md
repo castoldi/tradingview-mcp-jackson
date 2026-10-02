@@ -266,6 +266,12 @@ The user is interested in **day-trading opportunities in NNQ** (`CME_MINI:NNQ1!`
 - Give a specific entry trigger, invalidation (stop) level, and first target, and state the R:R. Avoid entries in the middle of the range.
 - Flag time-of-day context: open chop 8:30–8:45 CT, lunch lull ~11:30–12:45 CT, and high-impact news (CPI, FOMC, NFP, mega-cap earnings — NQ is driven by AAPL/MSFT/NVDA/AMZN/META/GOOGL).
 - Day trades only: no holding overnight; flat by the 15:00 CT cash close (equity-index futures halt 16:00–17:00 CT).
+- **Target-reachability check (MANDATORY before quoting any target):** a target is only valid if price can realistically get there in the time left before the close. Before giving TPs:
+  1. Pull 15m bars (`count: 500` ≈ 5 sessions) and, for the last 3–5 sessions, measure the range and the largest move in the trade's direction from the current time-of-day to 15:00 CT.
+  2. Compare today's 8:30→now volume against the same window on prior days, and note how much of today's typical session range has already been used.
+  3. If distance-to-target exceeds the typical remaining move, mark that target unrealistic and drop it. Don't present a measured move as a target just because the pattern projects it.
+  4. **Fridays and the afternoon:** volume thins and price tends to chop after lunch, especially Friday afternoon as traders square up. On Friday NNQ also stops trading at 16:00 CT and doesn't reopen until 17:00 CT Sunday, so anything left open carries weekend gap risk. Favor the nearer target and plan to be flat by 15:00 CT.
+  - Example (2026-10-02, Fri 12:00 CT): bear-flag TP2 was ~318 pts away, while the prior 3 afternoons (12:45–15:00 CT) ranged only 151–179 pts and today's whole session had already moved 294 pts. TP2 was unrealistic, so only TP1 (~100 pts) was valid.
 - Verify the contract point value / tick value (`symbol_info` returns only metadata, so check the CME contract specs) before quoting dollar risk — don't assume it.
 
 ## Active Trading Setup (this account)
