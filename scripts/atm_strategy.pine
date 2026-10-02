@@ -1,0 +1,102 @@
+// SPX500 ATM Strategy — Pine v6 indicator
+// Second Higher High / Higher Low breakout (Dow theory continuation).
+// Detects sequence: prev_HH -> HL -> new_HH (second), entry on close > new_HH.
+// Mirror for shorts. SL = last opposite pivot. TP = entry +/- R:R * risk.
+// Window: 08:45-12:00 and 12:45-14:00 CT (skip open chop and lunch).
+// One trade per day.
+
+//@version=6
+indicator("SPX500 ATM Strategy", overlay=true, max_labels_count=100)
+
+// === Inputs ===
+left   = input.int(3, "Pivot Left",  minval=1)
+right  = input.int(3, "Pivot Right", minval=1)
+rr     = input.float(2.0, "R:R Target", minval=0.5, step=0.1)
+
+// === Pivots ===
+ph = ta.pivothigh(left, right)
+pl = ta.pivotlow(left, right)
+
+// === Pivot history ===
+var float prev_ph     = na
+var float last_ph     = na
+var int   prev_ph_bar = na
+var int   last_ph_bar = na
+
+var float prev_pl     = na
+var float last_pl     = na
+var int   prev_pl_bar = na
+var int   last_pl_bar = na
+
+if not na(ph)
+    prev_ph     := last_ph
+    prev_ph_bar := last_ph_bar
+    last_ph     := ph
+    last_ph_bar := bar_index - right
+
+if not na(pl)
+    prev_pl     := last_pl
+    prev_pl_bar := last_pl_bar
+    last_pl     := pl
+    last_pl_bar := bar_index - right
+
+// === Daily reset ===
+var bool taken_today = false
+new_day = ta.change(time("D")) != 0
+if new_day
+    taken_today := false
+
+// === Pattern: second HH/HL (long) and second LL/LH (short) ===
+// Long: prev_PH < last_PH AND prev_PL < last_PL AND time order prev_PH -> last_PL -> last_PH
+long_structure  = not na(prev_ph) and not na(last_ph) and not na(prev_pl) and not na(last_pl) and last_ph > prev_ph and last_pl > prev_pl and prev_ph_bar < last_pl_bar and last_pl_bar < last_ph_bar
+
+// Short: prev_PH > last_PH AND prev_PL > last_PL AND time order prev_PL -> last_PH -> last_PL
+short_structure = not na(prev_ph) and not na(last_ph) and not na(prev_pl) and not na(last_pl) and last_ph < prev_ph and last_pl < prev_pl and prev_pl_bar < last_ph_bar and last_ph_bar < last_pl_bar
+
+// === Trade window (CT): 08:45-12:00 and 12:45-14:00, Mon-Fri ===
+in_morning = not na(time("3", "0845-1200:23456", "America/Chicago"))
+in_afternoon = not na(time("3", "1245-1400:23456", "America/Chicago"))
+in_window = in_morning or in_afternoon
+
+// === Signal + levels ===
+var float entry_level = na
+var float sl_level    = na
+var float tp_level    = na
+signal = 0.0
+
+if in_window and not taken_today
+    if long_structure and close > last_ph
+        signal       := 1.0
+        entry_level  := close
+        sl_level     := last_pl
+        tp_level     := close + rr * (close - last_pl)
+        taken_today  := true
+    else if short_structure and close < last_pl
+        signal       := -1.0
+        entry_level  := close
+        sl_level     := last_ph
+        tp_level     := close - rr * (last_ph - close)
+        taken_today  := true
+
+// === Plots ===
+// Pivot markers on price (visualization)
+plotshape(not na(ph), title="PH", location=location.abovebar, color=color.new(color.red, 30),   style=shape.triangledown, size=size.tiny)
+plotshape(not na(pl), title="PL", location=location.belowbar, color=color.new(color.green, 30), style=shape.triangleup,   size=size.tiny)
+
+// Entry markers
+plotshape(signal == 1.0,  title="Long Entry",  location=location.belowbar, color=color.green, style=shape.labelup,   text="ATM L", textcolor=color.white, size=size.small)
+plotshape(signal == -1.0, title="Short Entry", location=location.abovebar, color=color.red,   style=shape.labeldown, text="ATM S", textcolor=color.white, size=size.small)
+
+// SL/TP lines drawn from entry bar forward (visible only after a signal)
+plot(entry_level, "Entry", color=color.new(color.yellow, 40), linewidth=2, trackprice=false)
+plot(sl_level,    "SL",    color=color.new(color.red, 40),    linewidth=1, trackprice=false)
+plot(tp_level,    "TP",    color=color.new(color.green, 40),  linewidth=1, trackprice=false)
+
+// Data window outputs (read by the cron)
+plot(signal,   "Signal",   display=display.data_window)
+plot(last_ph,  "Last_PH",  display=display.data_window)
+plot(last_pl,  "Last_PL",  display=display.data_window)
+plot(prev_ph,  "Prev_PH",  display=display.data_window)
+plot(prev_pl,  "Prev_PL",  display=display.data_window)
+plot(long_structure  ? 1 : 0, "Long_Ready",  display=display.data_window)
+plot(short_structure ? 1 : 0, "Short_Ready", display=display.data_window)

@@ -1,0 +1,169 @@
+//@version=6
+// SPX500 Tape Reader — bar-based approximation of Jeff Holden's tape-reading framework.
+//
+// Pine has no Level 2 / Time & Sales, so the four "tape" signals are mapped to bar proxies:
+//   1) Offer thinning at resistance  -> shrinking upper-wick rejection on recent tests
+//   2) Sweep order                   -> wide-range bar (>1.5x ATR), close in top/bottom 25%,
+//                                       volume > 1.8x 20-bar average
+//   3) Bid stacking on pullbacks     -> rolling lows rising, pullback depth shrinking
+//   4) Print speed acceleration      -> last-3-bar avg volume > 1.5x prior-10-bar avg
+//
+// Setup: define resistance = highest high last N bars (and mirror support = lowest low).
+//        Require >=2 tests of the level (high/low within tolerance) showing absorption.
+//        Trigger: close crosses the level AND >=3 of the 4 signals are true on that bar.
+//
+// Trade management: SL = recent swing extreme +/- 0.25xATR, TP = entry +/- 2.0 * risk.
+// One signal per day, window 08:45-14:00 CT.
+
+indicator("SPX500 Tape Reader", "TapeRead", overlay=true, max_labels_count=100)
+
+// === INPUTS ===
+range_lb        = input.int(20,   "Range lookback (bars)",                 minval=5,  group="Setup")
+test_tol_pct    = input.float(0.05, "Test tolerance (% of level)", step=0.01, group="Setup")
+min_tests       = input.int(2,    "Min tests of the level",                minval=1,  group="Setup")
+min_signals     = input.int(3,    "Min signals required (of 4)",           minval=1, maxval=4, group="Trigger")
+rr              = input.float(2.0, "R:R target",                  step=0.1, minval=0.5, group="Risk")
+sl_atr_buffer   = input.float(0.25,"SL buffer (xATR beyond swing)", step=0.05, group="Risk")
+
+// Signal sensitivities
+sweep_range_mult  = input.float(1.5, "Sweep: range/ATR multiple",   step=0.1, group="Signals")
+sweep_close_pct   = input.float(0.25,"Sweep: close inside top/bottom % of bar", step=0.05, group="Signals")
+sweep_vol_mult    = input.float(1.8, "Sweep: volume vs avg multiple", step=0.1, group="Signals")
+print_accel_mult  = input.float(1.5, "Print accel: last3 vs prior10 multiple", step=0.1, group="Signals")
+
+show_levels     = input.bool(true, "Plot resistance/support",     group="Visuals")
+show_targets    = input.bool(true, "Plot SL / TP after signal",   group="Visuals")
+
+// === SESSION GATE (CT, Mon-Fri, 08:45-14:00) ===
+in_window = not na(time("3", "0845-1400:23456", "America/Chicago"))
+
+// === ATR ===
+atr14 = ta.atr(14)
+
+// === LEVELS ===
+// Use prior-bar window so the current bar can "test" it
+resistance = ta.highest(high, range_lb)[1]
+support    = ta.lowest (low,  range_lb)[1]
+
+tol_R = resistance * test_tol_pct / 100.0
+tol_S = support    * test_tol_pct / 100.0
+
+// === TEST COUNT (rolling) ===
+test_R = high >= resistance - tol_R and high <= resistance + tol_R
+test_S = low  <= support    + tol_S and low  >= support    - tol_S
+tests_R = math.sum(test_R ? 1 : 0, range_lb)
+tests_S = math.sum(test_S ? 1 : 0, range_lb)
+
+// === SIGNAL 1: OFFER THINNING / BID THINNING (wick shrinkage) ===
+// upper wick = high - max(open, close); lower wick = min(open, close) - low
+upper_wick = high - math.max(open, close)
+lower_wick = math.min(open, close) - low
+
+uw_recent = math.avg(upper_wick, upper_wick[1], upper_wick[2])
+uw_prior  = (upper_wick[3] + upper_wick[4] + upper_wick[5] + upper_wick[6] + upper_wick[7]) / 5.0
+sig_offer_thin = uw_prior > 0 and uw_recent < uw_prior * 0.6
+
+lw_recent = math.avg(lower_wick, lower_wick[1], lower_wick[2])
+lw_prior  = (lower_wick[3] + lower_wick[4] + lower_wick[5] + lower_wick[6] + lower_wick[7]) / 5.0
+sig_bid_thin = lw_prior > 0 and lw_recent < lw_prior * 0.6  // mirror for shorts
+
+// === SIGNAL 2: SWEEP ORDER (wide range bar, closes at extreme, high volume) ===
+bar_range = high - low
+top_threshold    = high - bar_range * sweep_close_pct
+bottom_threshold = low  + bar_range * sweep_close_pct
+vol_avg20 = ta.sma(volume, 20)
+
+sig_sweep_up = bar_range > sweep_range_mult * atr14 and close >= top_threshold    and volume > sweep_vol_mult * vol_avg20
+sig_sweep_dn = bar_range > sweep_range_mult * atr14 and close <= bottom_threshold and volume > sweep_vol_mult * vol_avg20
+
+// === SIGNAL 3: BID STACKING / OFFER STACKING ===
+// Bid stacking (longs): recent lows rising AND last pullback shallower than prior pullback
+ll_recent5  = ta.lowest(low, 5)
+ll_prior5   = ta.lowest(low, 5)[5]
+hh_recent5  = ta.highest(high, 5)
+hh_prior5   = ta.highest(high, 5)[5]
+
+pullback_recent_long = hh_recent5 - ll_recent5
+pullback_prior_long  = hh_prior5  - ll_prior5
+sig_bid_stack = ll_recent5 > ll_prior5 and pullback_recent_long < pullback_prior_long
+
+// Offer stacking (shorts): recent highs falling AND last bounce shallower
+bounce_recent_short = hh_recent5 - ll_recent5
+bounce_prior_short  = hh_prior5  - ll_prior5
+sig_offer_stack = hh_recent5 < hh_prior5 and bounce_recent_short < bounce_prior_short
+
+// === SIGNAL 4: PRINT-SPEED ACCELERATION (volume rolling) ===
+vol_recent3 = (volume + volume[1] + volume[2]) / 3.0
+vol_prior10 = ta.sma(volume[3], 10)
+sig_print_accel = vol_prior10 > 0 and vol_recent3 > print_accel_mult * vol_prior10
+
+// === LONG / SHORT SIGNAL COUNTS ===
+long_count  = (sig_offer_thin  ? 1 : 0) + (sig_sweep_up ? 1 : 0) + (sig_bid_stack   ? 1 : 0) + (sig_print_accel ? 1 : 0)
+short_count = (sig_bid_thin    ? 1 : 0) + (sig_sweep_dn ? 1 : 0) + (sig_offer_stack ? 1 : 0) + (sig_print_accel ? 1 : 0)
+
+// === DAILY LOCK ===
+var bool taken_today = false
+new_day = ta.change(time("D")) != 0
+if new_day
+    taken_today := false
+
+// === BREAKOUT TRIGGER ===
+long_break  = close > resistance and close[1] <= resistance
+short_break = close < support    and close[1] >= support
+
+long_ready  = in_window and not taken_today and tests_R >= min_tests and long_count  >= min_signals
+short_ready = in_window and not taken_today and tests_S >= min_tests and short_count >= min_signals
+
+// === LEVELS & TARGETS ===
+var float entry_level = na
+var float sl_level    = na
+var float tp_level    = na
+signal = 0.0
+
+long_sl_swing  = ll_recent5 - sl_atr_buffer * atr14
+short_sl_swing = hh_recent5 + sl_atr_buffer * atr14
+
+if long_ready and long_break
+    entry_level := close
+    sl_level    := long_sl_swing
+    tp_level    := close + rr * (close - long_sl_swing)
+    signal      := 1.0
+    taken_today := true
+else if short_ready and short_break
+    entry_level := close
+    sl_level    := short_sl_swing
+    tp_level    := close - rr * (short_sl_swing - close)
+    signal      := -1.0
+    taken_today := true
+
+// === PLOTS ===
+plot(show_levels ? resistance : na, "Resistance", color=color.new(color.red,   30), linewidth=1, style=plot.style_linebr)
+plot(show_levels ? support    : na, "Support",    color=color.new(color.green, 30), linewidth=1, style=plot.style_linebr)
+
+plotshape(signal ==  1.0, title="Long Entry",  location=location.belowbar, color=color.green, style=shape.labelup,   text="TAPE L", textcolor=color.white, size=size.small)
+plotshape(signal == -1.0, title="Short Entry", location=location.abovebar, color=color.red,   style=shape.labeldown, text="TAPE S", textcolor=color.white, size=size.small)
+
+plot(show_targets ? entry_level : na, "Entry", color=color.new(color.yellow, 40), linewidth=2)
+plot(show_targets ? sl_level    : na, "SL",    color=color.new(color.red,    40), linewidth=1)
+plot(show_targets ? tp_level    : na, "TP",    color=color.new(color.green,  40), linewidth=1)
+
+// === DATA WINDOW (read by the cron) ===
+plot(signal,            "Signal",          display=display.data_window)
+plot(entry_level,       "Entry",           display=display.data_window)
+plot(sl_level,          "SL",              display=display.data_window)
+plot(tp_level,          "TP",              display=display.data_window)
+plot(resistance,        "Resistance",      display=display.data_window)
+plot(support,           "Support",         display=display.data_window)
+plot(tests_R,           "Tests_R",         display=display.data_window)
+plot(tests_S,           "Tests_S",         display=display.data_window)
+plot(long_count,        "Long_Count",      display=display.data_window)
+plot(short_count,       "Short_Count",     display=display.data_window)
+plot(sig_offer_thin  ? 1 : 0, "Sig_Offer_Thin",  display=display.data_window)
+plot(sig_bid_thin    ? 1 : 0, "Sig_Bid_Thin",    display=display.data_window)
+plot(sig_sweep_up    ? 1 : 0, "Sig_Sweep_Up",    display=display.data_window)
+plot(sig_sweep_dn    ? 1 : 0, "Sig_Sweep_Dn",    display=display.data_window)
+plot(sig_bid_stack   ? 1 : 0, "Sig_Bid_Stack",   display=display.data_window)
+plot(sig_offer_stack ? 1 : 0, "Sig_Offer_Stack", display=display.data_window)
+plot(sig_print_accel ? 1 : 0, "Sig_Print_Accel", display=display.data_window)
+plot(long_ready      ? 1 : 0, "Long_Ready",      display=display.data_window)
+plot(short_ready     ? 1 : 0, "Short_Ready",     display=display.data_window)

@@ -1,0 +1,170 @@
+//@version=6
+// SPX500 Fib Scalper 1m — Fibonacci retracement scalping per the video transcript
+// Logic: detect HH/HL (up) or LH/LL (down) trend, wait for break of structure,
+// draw fib of the BOS leg, signal when price retraces into the 0.5-0.618 "gold zone".
+// SL = 1.0 retracement (full leg), TP = leg origin (previous swing low for shorts,
+// previous swing high for longs). R:R ~ 1.6 from 0.618 entry, ~1.0 from 0.5 entry.
+//
+// Recommended: 1m chart. Logic works on any TF but the strategy is designed for
+// fast scalps (7-15 minutes hold time) per the source video.
+
+indicator("SPX500 Fib Scalper 1m", "FibScalp", overlay=true,
+     max_lines_count=100, max_labels_count=50, max_boxes_count=20)
+
+// === INPUTS ===
+pivot_len     = input.int(3, "Pivot lookback (bars each side)", minval=1, maxval=10,
+                     group="Structure")
+fib_gz_low    = input.float(0.5,   "Gold-zone lower fib",       step=0.001, group="Fibonacci")
+fib_gz_high   = input.float(0.618, "Gold-zone upper fib",       step=0.001, group="Fibonacci")
+fib_sl        = input.float(1.0,   "Stop-loss fib level",       step=0.01,  group="Fibonacci")
+prefer_618    = input.bool(true,   "Prefer 0.618 entry price (best R:R)", group="Fibonacci")
+session_only  = input.bool(true,   "Restrict to 08:30-14:30 CT (US cash)", group="Session")
+show_zone     = input.bool(true,   "Draw gold-zone box",        group="Visuals")
+show_targets  = input.bool(true,   "Plot SL / TP lines",        group="Visuals")
+
+// === SESSION GATE (St. Louis local time — CT) ===
+inRTH = not session_only or
+     ((hour > 8 or (hour == 8 and minute >= 30)) and
+      (hour < 14 or (hour == 14 and minute <= 30)))
+
+// === PIVOT TRACKING ===
+ph_raw = ta.pivothigh(high, pivot_len, pivot_len)
+pl_raw = ta.pivotlow (low,  pivot_len, pivot_len)
+
+var float last_ph = na
+var float prev_ph = na
+var float last_pl = na
+var float prev_pl = na
+
+if not na(ph_raw)
+    prev_ph := last_ph
+    last_ph := ph_raw
+if not na(pl_raw)
+    prev_pl := last_pl
+    last_pl := pl_raw
+
+// === TREND CONFIRMATION (relaxed — only the most recent pair needs to agree) ===
+uptrend   = not na(prev_ph) and not na(last_ph) and not na(prev_pl) and not na(last_pl)
+             and last_ph > prev_ph and last_pl > prev_pl
+downtrend = not na(prev_ph) and not na(last_ph) and not na(prev_pl) and not na(last_pl)
+             and last_ph < prev_ph and last_pl < prev_pl
+
+// === BREAK OF STRUCTURE ===
+// Up-BOS: in uptrend, close breaks above last swing high → start LONG setup.
+// Down-BOS: in downtrend, close breaks below last swing low → start SHORT setup.
+bos_up_trig = uptrend   and not na(last_ph) and close > last_ph
+bos_dn_trig = downtrend and not na(last_pl) and close < last_pl
+
+// === ACTIVE SETUP STATE ===
+var bool  setup_long   = false
+var bool  setup_short  = false
+var float leg_high     = na  // top of BOS leg
+var float leg_low      = na  // bottom of BOS leg
+var int   setup_bar    = na
+var bool  long_taken   = false
+var bool  short_taken  = false
+
+// Open a fresh LONG setup on up-BOS — leg goes from last_pl (origin) to current high
+if bos_up_trig
+    setup_long  := true
+    setup_short := false
+    leg_low     := last_pl
+    leg_high    := high
+    setup_bar   := bar_index
+    long_taken  := false
+
+// Open a fresh SHORT setup on down-BOS — leg from last_ph (origin) down to current low
+if bos_dn_trig
+    setup_short := true
+    setup_long  := false
+    leg_high    := last_ph
+    leg_low     := low
+    setup_bar   := bar_index
+    short_taken := false
+
+// Extend the leg if price keeps running before the retracement starts
+if setup_long  and high > leg_high
+    leg_high := high
+if setup_short and low  < leg_low
+    leg_low  := low
+
+// === FIB LEVELS (computed for the active setup) ===
+leg_range = leg_high - leg_low
+
+// LONG: 100% = leg_high, 0% = leg_low; gold zone is BELOW leg_high (retrace down)
+gz_long_top  = setup_long  ? leg_high - leg_range * fib_gz_low  : na  // 0.5 line
+gz_long_bot  = setup_long  ? leg_high - leg_range * fib_gz_high : na  // 0.618 line
+sl_long_lvl  = setup_long  ? leg_high - leg_range * fib_sl      : na  // 1.0 = leg_low
+tp_long_lvl  = setup_long  ? leg_high                            : na  // previous swing high
+
+// SHORT: 100% = leg_low (full retrace up to leg_high), 0% = leg_high
+// Gold zone is ABOVE leg_low (price retraces up into it)
+gz_short_bot = setup_short ? leg_low + leg_range * fib_gz_low   : na  // 0.5 line
+gz_short_top = setup_short ? leg_low + leg_range * fib_gz_high  : na  // 0.618 line
+sl_short_lvl = setup_short ? leg_low + leg_range * fib_sl       : na  // 1.0 = leg_high
+tp_short_lvl = setup_short ? leg_low                             : na  // previous swing low
+
+// === ENTRY PRICES ===
+entry_long  = prefer_618 ? gz_long_bot  : (gz_long_top  + gz_long_bot)  / 2
+entry_short = prefer_618 ? gz_short_top : (gz_short_top + gz_short_bot) / 2
+
+// === GOLD-ZONE TAG (signal trigger) ===
+tagged_long  = setup_long  and inRTH and not long_taken
+                 and low  <= gz_long_top  and low  >= gz_long_bot
+tagged_short = setup_short and inRTH and not short_taken
+                 and high >= gz_short_bot and high <= gz_short_top
+
+if tagged_long
+    long_taken := true
+if tagged_short
+    short_taken := true
+
+// === SETUP INVALIDATION ===
+// Close the setup once TP hits, SL hits, or a fresh opposite BOS fires
+if setup_long
+    if high >= tp_long_lvl
+        setup_long := false
+    else if low <= sl_long_lvl
+        setup_long := false
+if setup_short
+    if low <= tp_short_lvl
+        setup_short := false
+    else if high >= sl_short_lvl
+        setup_short := false
+
+// === DATA WINDOW OUTPUTS (read by the trading-bot cron) ===
+Signal     = tagged_long ? 1 : tagged_short ? -1 : 0
+Entry      = tagged_long ? entry_long : tagged_short ? entry_short : na
+SL_lvl     = tagged_long ? sl_long_lvl : tagged_short ? sl_short_lvl : na
+TP_lvl     = tagged_long ? tp_long_lvl : tagged_short ? tp_short_lvl : na
+LongReady  = setup_long  and not long_taken  ? 1 : 0
+ShortReady = setup_short and not short_taken ? 1 : 0
+LegRange   = leg_range
+
+plot(Signal,     "Signal",      display=display.data_window)
+plot(Entry,      "Entry",       display=display.data_window)
+plot(SL_lvl,     "SL",          display=display.data_window)
+plot(TP_lvl,     "TP",          display=display.data_window)
+plot(LongReady,  "Long_Ready",  display=display.data_window)
+plot(ShortReady, "Short_Ready", display=display.data_window)
+plot(LegRange,   "Leg_Range",   display=display.data_window)
+plot(leg_high,   "Leg_High",    display=display.data_window)
+plot(leg_low,    "Leg_Low",     display=display.data_window)
+
+// === VISUALS ===
+gz_top = setup_long ? gz_long_top : setup_short ? gz_short_top : na
+gz_bot = setup_long ? gz_long_bot : setup_short ? gz_short_bot : na
+
+p_gz_top = plot(show_zone ? gz_top : na, "GZ top", color=color.new(color.orange, 30))
+p_gz_bot = plot(show_zone ? gz_bot : na, "GZ bot", color=color.new(color.orange, 30))
+fill(p_gz_top, p_gz_bot, color=color.new(color.orange, 85), title="Gold Zone")
+
+plot(show_targets ? (setup_long ? sl_long_lvl : setup_short ? sl_short_lvl : na) : na,
+     "SL line", color=color.new(color.red,   0), style=plot.style_linebr)
+plot(show_targets ? (setup_long ? tp_long_lvl : setup_short ? tp_short_lvl : na) : na,
+     "TP line", color=color.new(color.green, 0), style=plot.style_linebr)
+
+plotshape(tagged_long,  "BUY",  shape.triangleup,   location.belowbar,
+     color.new(color.lime, 0), size=size.small, text="LONG")
+plotshape(tagged_short, "SELL", shape.triangledown, location.abovebar,
+     color.new(color.red,  0), size=size.small, text="SHORT")

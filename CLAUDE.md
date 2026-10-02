@@ -68,14 +68,25 @@ Use `study_filter` parameter to target a specific indicator by name substring (e
 
 ### "Work on Pine Script"
 1. Open Pine Editor first: `ui_open_panel pine-editor open` (required before `pine_new`)
-2. `pine_new` → create blank indicator/strategy/library
+2. `pine_new` → create blank indicator/strategy/library (uses shared "Untitled" slot in editor)
 3. `pine_set_source` → inject code into editor (always use `//@version=6`, not v5)
-4. `pine_smart_compile` → compile with auto-detection + error check
-5. `pine_get_errors` → read compilation errors
-6. `pine_get_console` → read log.info() output
-7. `pine_get_source` → read current code back (WARNING: can be very large for complex scripts)
-8. `pine_save` → save to TradingView cloud
-9. `pine_open` → load a saved script by name
+4. `pine_save_as name="..."` → **save as NEW cloud slot with the given name (does NOT overwrite existing saved scripts).** Use this for any new strategy. Only works on unsaved scripts — call right after `pine_new`+`pine_set_source`.
+5. `pine_smart_compile` → compile with auto-detection + error check (also "Add to chart")
+6. `pine_get_errors` → read compilation errors
+7. `pine_get_console` → read log.info() output
+8. `pine_get_source` → read current code back (WARNING: can be very large for complex scripts)
+9. `pine_save` → save updates to the CURRENTLY OPEN saved script (Ctrl+S, no rename). **Will overwrite the active cloud slot** — use only when editing an already-saved script that you intend to update in place.
+10. `pine_open` → load a saved script by name
+
+**Adding a NEW strategy without clobbering existing ones (correct flow as of 2026-05-23):**
+```
+ui_open_panel pine-editor open
+pine_new type=indicator
+pine_set_source source="..."
+pine_save_as name="My Strategy"   ← critical: creates new cloud slot
+pine_smart_compile                 ← adds to chart
+```
+The old broken flow (`pine_new` → `pine_smart_compile` directly) saves to the same "Untitled" slot every time and overwrites the previous strategy. Always go through `pine_save_as` for new strategies.
 
 **"Add to chart" button workaround** — `ui_click text "Add to chart"` does NOT work. Use this instead:
 ```js
@@ -150,16 +161,38 @@ Run these steps in order every time:
 3. `layout_switch name: "AUGUSTO"` → load the trading layout
 4. `chart_set_symbol symbol: "OANDA:SPX500USD"` → ensure SPX500 is active
 5. `chart_set_timeframe` → confirm 3m (only set if different)
+5a. **Indicator-state check (added 2026-05-23 PM — REQUIRED until ORB-15 is back)**:
+    - `chart_get_state` → list current studies
+    - If `SPX500 ORB 15` is missing from `studies`, restore it before doing anything else:
+        1. `ui_open_panel pine-editor open`
+        2. `pine_new type: "indicator"`
+        3. `pine_set_source` with the contents of `scripts/orb_15.pine`
+        4. `pine_save_as name: "SPX500 ORB 15"` — must succeed (uses pine-facade API after the 2026-05-23 patch). If it fails, STOP and surface the error to the user — do NOT proceed with `pine_smart_compile`, which would clobber another slot.
+        5. `pine_smart_compile` → confirms compile + adds to chart
+        6. `ui_open_panel pine-editor close`
+        7. `chart_get_state` → verify ORB-15 is now in `studies`
+    - Same routine applies if `SPX500 Fib Scalper 1m` is missing (use `scripts/fib_scalper.pine`, slot name `SPX500 Fib Scalper 1m`). Basic-plan limit is 2 indicators per chart — ORB-15 + Fib Scalper is the intended pair on the 3m AUGUSTO layout; ATM Strategy and Tape Reader need their own chart or you have to swap.
+    - Same routine applies if `SPX500 Tape Reader` is missing (use `scripts/tape_reader.pine`, slot name `SPX500 Tape Reader`). Tape Reader is the 4th strategy — does NOT live on the AUGUSTO 3m chart by default. Activate only when user swaps in Tape Reader for one of the active indicators (typically swap with ATM Strategy on a dedicated chart).
+    - Background context: see [[pine-save-as-tool]] memory entry. The original `pine_save_as` had a bug that wiped both ORB-15 and EMA Bounce slots on 2026-05-23 PM. After ORB-15 is restored and you've verified the patched tool works, you can delete this step.
 6. Create cron jobs (local CT time, Mon–Fri):
-   - **ORB-15 (only active strategy)**: `CronCreate cron: "*/3 8-10 * * 1-5"` (8:30-8:44 forms range, signals fire 8:45-10:30 CT, one trade/day max)
+   - **ORB-15**: `CronCreate cron: "*/3 8-10 * * 1-5"` (8:30-8:44 forms range, signals fire 8:45-10:30 CT, one trade/day max)
+   - **ATM Strategy**: `CronCreate cron: "*/3 8-13 * * 1-5"` (second HH/HL breakout, 8:45-14:00 CT excluding 12:00-12:44 lunch, one trade/day max)
+   - **Fib Scalper 1m**: `CronCreate cron: "* 8-14 * * 1-5"` (every minute, 8:00-14:59 CT; indicator self-gates 8:30-14:30; requires 1m chart for full signal cadence)
+   - **Tape Reader**: `CronCreate cron: "*/3 8-13 * * 1-5"` (every 3 min, 8:00-13:59 CT; indicator self-gates 8:45-14:00, one trade/day max). **Only create this cron if the Tape Reader indicator is actually loaded on a chart** — by default it is NOT on the AUGUSTO 3m chart. Skip otherwise.
    - **Market Close**: `CronCreate cron: "30 14 * * 1-5"` (close all SPX500 positions at 2:30 PM CT)
-   - **Noon Summary**: `CronCreate cron: "0 12 * * 1-5"` (email trading summary)
-   - **EOD Summary**: `CronCreate cron: "0 15 * * 1-5"` (email trading summary)
+   - **Noon Summary**: `CronCreate cron: "3 12 * * 1-5"` (email mid-day summary at 12:03 CT — during lunch-skip trade window so no competition)
+   - **EOD Summary**: `CronCreate cron: "35 14 * * 1-5"` (email EOD summary at 14:35 CT — 5 min after market close, when no trade crons compete) — MANDATORY, must always fire
    - EMA Bounce Scalper retired 2026-05-21 (0/4 WR).
    - EMA200 Touch indicator accidentally overwritten 2026-05-21 PM during ORB pine_new flow; cron deleted. Restore via Pine UI Save-As if needed.
+
+**Critical timing notes for summary crons** (added 2026-05-21 after 3 PM EOD didn't fire):
+- Session-only crons queue while Claude is busy with other tools. If multiple crons land on the same minute, some may not fire by the time the user notices.
+- Schedule summaries at off-peak times: 12:03 CT (deep lunch, no trade-execution cron) and 14:35 CT (5 min after market close, no other crons).
+- The `durable: true` flag is silently ignored on this version — crons are always session-only. They must be re-created every time the bot starts.
+- If the EOD email is somehow missed, send it manually with `node scripts/send-summary-email.js "subject" "body"` as soon as you notice.
    - User is in **St. Louis, CT — CDT (UTC-5) in summer, CST (UTC-6) in winter**
    - Cron uses local time so DST is handled automatically — the expression never needs to change between seasons
-7. Report the four new cron job IDs and confirm all systems are live
+7. Report the new cron job IDs (ORB-15, ATM, Fib Scalper, Tape Reader [if loaded], Market Close, Noon, EOD) and confirm all systems are live
 
 ## Context Management Rules
 
@@ -216,6 +249,25 @@ Each cron tick that produces a signal must run TWO scripts in order:
 
 **Always run place-trade.js BEFORE notify-trade.js.** Email without a real order is misleading.
 
+## NNQ day-trading focus (added 2026-10-02)
+
+The user is interested in **day-trading opportunities in NNQ** (`CME_MINI:NNQ1!`, E-nano Nasdaq-100 Futures, continuous contract). When they ask about "NQ", "NNQ", "the Nasdaq" or "is it a good time to buy/short", analyze NNQ1! with a day-trading lens. This is discretionary analysis on request — there is no NNQ cron or automated execution; the SPX500 bot below is separate.
+
+**Analysis workflow** (top-down, intraday bias):
+1. `chart_get_state` → note the current symbol/timeframe so you can restore it afterwards.
+2. `chart_set_symbol CME_MINI:NNQ1!` → `quote_get`.
+3. For each timeframe D → 60 → 15 → 5: `data_get_ohlcv summary: true`, plus EMA20/EMA50 (EMA200 on daily) and RSI14 — compute from bars if the indicators aren't on the chart (Basic plan: 2 indicators max).
+4. Identify key intraday levels: prior-day high/low/close, overnight (Globex) high/low, today's high/low, the 8:30–8:44 CT opening range, and the most recent 15m swing high/low.
+5. Restore the user's original symbol and timeframe.
+
+**How to answer "good time to long/short?"**
+- Lead with a direct verdict (yes / no / wait for X).
+- Trade with the higher-timeframe trend by default; counter-trend calls need a concrete trigger (rejection at a level, or a 15m close through a swing level plus a failed retest). Overbought/oversold RSI alone is not a trigger.
+- Give a specific entry trigger, invalidation (stop) level, and first target, and state the R:R. Avoid entries in the middle of the range.
+- Flag time-of-day context: open chop 8:30–8:45 CT, lunch lull ~11:30–12:45 CT, and high-impact news (CPI, FOMC, NFP, mega-cap earnings — NQ is driven by AAPL/MSFT/NVDA/AMZN/META/GOOGL).
+- Day trades only: no holding overnight; flat by the 15:00 CT cash close (equity-index futures halt 16:00–17:00 CT).
+- Verify the contract point value / tick value (`symbol_info` returns only metadata, so check the CME contract specs) before quoting dollar risk — don't assume it.
+
 ## Active Trading Setup (this account)
 
 | Setting | Value |
@@ -224,9 +276,9 @@ Each cron tick that produces a signal must run TWO scripts in order:
 | Broker | Paper Trading |
 | Account | accastoldi USD (~$99,929 balance) |
 | Active symbol | OANDA:SPX500USD, 3m |
-| Indicators | "SPX500 ORB 15" (sole indicator as of 2026-05-21 PM; EMA200 Touch script was accidentally overwritten and pine_new doesn't support Save-As) |
+| Indicators | "SPX500 Fib Scalper 1m" (added 2026-05-23). "SPX500 ORB 15" was wiped from chart + cloud on 2026-05-23 by the pine_new clobber bug — restore from `scripts/orb_15.pine` after restarting the MCP server (fixed `pine_save_as` now uses the pine-facade API). The Fib Scalper code currently lives inside the `SPX500 EMA Bounce Scalper` cloud slot (title is correct, slot folder name is wrong — cosmetic only). |
 | Trading hours | 8:00 AM - 2:30 PM CT (close all positions by 2:30 PM CT mandatory) |
-| Active cron loops | ORB-15 only + market close + summaries |
+| Active cron loops | ORB-15 + ATM Strategy + Fib Scalper + market close + summaries |
 
 ### SPX500 EMA Bounce Scalper — strategy rules (CURRENT ACTIVE STRATEGY)
 **Status**: ✓ LIVE (replaced EMA Crossover & RSI Momentum Reversal on 2026-05-20)
@@ -276,6 +328,72 @@ Each cron tick that produces a signal must run TWO scripts in order:
 - **Expected**: 45-55% WR, ~1 trade/day, max ~$150 win or ~$100 loss
 - **Cron**: 8:00-10:59 CT, every 3 min (job `a29a8b45`)
 
+### SPX500 ATM Strategy — second HH/HL breakout (added 2026-05-23)
+- **Indicator**: "SPX500 ATM Strategy" (Pine Script, overlay=true) — source in `scripts/atm_strategy.pine`
+- **Asset**: OANDA:SPX500USD, 3m
+- **Core Logic**: Dow theory continuation. Detects sequence prev_HH → HL → second_HH; entry on close > second_HH (long). Mirror for short: prev_LL → LH → second_LL; entry on close < second_LL.
+  - **Why second, not first**: First breakouts often trap; the second confirmed HH/HL means trend is real.
+  - **BUY signal**: `last_PH > prev_PH AND last_PL > prev_PL AND time-order valid AND close > last_PH`
+  - **SELL signal**: `last_PH < prev_PH AND last_PL < prev_PL AND time-order valid AND close < last_PL`
+- **Pivot config**: left=3, right=3 (3-bar confirmation each side; ~3-bar signal lag)
+- **Stop Loss**: `last opposite pivot` — long SL = `last_PL`, short SL = `last_PH`. Read directly from indicator's `Last_PL` / `Last_PH` data window keys.
+- **Take Profit**: `entry ± 2.0 × |entry − SL|` (R:R = 2.0). Computed in cron from current price + SL level (not from indicator).
+- **Window**: 08:45–12:00 CT and 12:45–14:00 CT, Mon–Fri (skip open chop and lunch). Indicator self-gates.
+- **One trade/day**: indicator self-locks via `taken_today` flag (resets on new day).
+- **Data window keys**: `Signal` (1/-1/0), `Last_PH`, `Last_PL`, `Prev_PH`, `Prev_PL`, `Long_Ready`, `Short_Ready`
+- **Position sizing**: `min(round(100/|entry-SL|), 5000)` units — same risk model as ORB-15.
+- **Skip criteria**: SL distance not in 5–30 pts (too tight = stop-out noise; too wide = risk model breaks). Log reason if skipped.
+- **Expected**: ~1 signal/day on trending days, 0 on choppy/range days. R:R 2.0 means 33%+ WR = positive EV.
+- **Cron**: 8:00-13:59 CT, every 3 min — see job ID below.
+
+### SPX500 Fib Scalper 1m — Fibonacci retracement scalper (added 2026-05-23)
+- **Indicator**: "SPX500 Fib Scalper 1m" (Pine Script, overlay=true) — source in `scripts/fib_scalper.pine`
+- **Asset**: OANDA:SPX500USD. **Designed for 1m chart** per the source video; logic is TF-agnostic but signals will be sparse and slow on 3m. Switch the chart to 1m before running the cron, or accept fewer/slower setups on 3m.
+- **Core Logic**: Detect short-term trend (HH/HL = uptrend, LH/LL = downtrend) → wait for break of structure (close past last swing) → draw Fib of the BOS leg → signal when price retraces into the 0.5–0.618 "gold zone".
+  - **BUY signal**: uptrend (last_PH>prev_PH AND last_PL>prev_PL) AND close > last_PH (up-BOS) AND a later bar tags the 0.5–0.618 retracement of the leg
+  - **SELL signal**: downtrend (last_PH<prev_PH AND last_PL<prev_PL) AND close < last_PL (down-BOS) AND a later bar tags the 0.5–0.618 retracement of the leg
+- **Pivot config**: left=3, right=3 (3-bar confirmation each side)
+- **Stop Loss**: 1.0 retracement of the leg (= origin pivot — `Leg_Low` for longs, `Leg_High` for shorts). Read from indicator's `SL` data window key when Signal fires.
+- **Take Profit**: opposite end of the leg (`Leg_High` for longs = the breakout extreme, `Leg_Low` for shorts). Read from indicator's `TP` key.
+- **R:R**: ~1.6 from 0.618 entry (default), ~1.0 from 0.5 entry. Below the other strategies but trades fire 6–10×/day on 1m.
+- **Window**: 08:30–14:30 CT (US cash session, toggleable via `session_only` input). One signal per setup; setup invalidates on SL hit, TP hit, or fresh opposite BOS.
+- **Data window keys**: `Signal` (1/-1/0), `Entry`, `SL`, `TP`, `Long_Ready`, `Short_Ready`, `Leg_Range`, `Leg_High`, `Leg_Low`
+- **Position sizing**: `min(round(100/|entry-SL|), 5000)` units — $100 max risk per trade (same model as other strategies).
+- **Skip criteria**: SL distance not in 5–30 pts (too tight → noise stops, too wide → blows risk model). Email-log the skip reason.
+- **Expected**: 4–10 signals/day on 1m, ~0–2 on 3m. Higher trade count than ATM/ORB but lower R:R; success depends on a trending session.
+- **NOT backtested yet** — added 2026-05-23 from the video transcript. Run on replay or paper-trade a day before relying on it.
+
+### SPX500 Tape Reader — bar-based approximation of Jeff Holden's tape-reading framework (added 2026-05-23 PM)
+- **Indicator**: "SPX500 Tape Reader" (Pine Script, overlay=true) — source in `scripts/tape_reader.pine`
+- **Asset**: OANDA:SPX500USD, 3m
+- **NOT loaded by default**: Tape Reader is the 4th SPX500 strategy. Basic plan limits 2 indicators/chart. To activate, swap with one of the active indicators (e.g., replace ATM Strategy on a dedicated chart) and only then create its cron.
+- **NOT backtested yet** — added 2026-05-23 PM from the Jeff Holden "Reading the Tape" video transcript.
+- **Pine limitation acknowledged**: Holden's framework requires Level 2 (bid/ask depth) and Time & Sales (every print). Pine only has OHLCV bars. The four signals below are bar-based proxies, not the real tape. Treat this as "tape-flavored momentum confirmation" rather than literal tape reading.
+- **Core Logic**: Define resistance = highest high last 20 bars, support = lowest low last 20 bars. Require ≥2 tests of the level (absorption). When close crosses the level AND ≥3 of 4 proxy signals fire on the same bar, signal a breakout.
+  - **BUY trigger**: `close > resistance AND close[1] <= resistance AND tests_R >= 2 AND long_count >= 3`
+  - **SELL trigger**: `close < support AND close[1] >= support AND tests_S >= 2 AND short_count >= 3`
+- **Four-signal proxies** (the bar-based approximation of Holden's framework):
+  1. **Offer thinning (longs) / Bid thinning (shorts)** — wick rejection shrinking: avg upper-wick of last 3 bars < 0.6× avg upper-wick of bars 3-7. Mirror for lower wick on shorts.
+  2. **Sweep order** — wide-range bar: `range > 1.5×ATR(14)` AND close in top 25% (for long sweep) or bottom 25% (for short sweep) of bar AND `volume > 1.8 × sma(volume, 20)`.
+  3. **Bid stacking (longs) / Offer stacking (shorts)** — recent lows rising AND pullback depth shrinking (rolling 5-bar window comparison). Mirror for shorts.
+  4. **Print acceleration** — `avg(volume, last 3) > 1.5 × sma(volume[3], 10)` (last 3 bars heavier than prior 10).
+- **Stop Loss**: `recent 5-bar swing extreme ± 0.25 × ATR(14)`. Long SL = `lowest_low(5) - 0.25×ATR`, short SL = `highest_high(5) + 0.25×ATR`. Read directly from indicator's `SL` data window key.
+- **Take Profit**: `entry ± 2.0 × |entry − SL|` (R:R = 2.0). Read from indicator's `TP` data window key.
+- **Window**: 08:45–14:00 CT (skip open chop, stop before market-close cleanup). Indicator self-gates.
+- **One trade/day**: indicator self-locks via `taken_today` flag (resets on new day).
+- **Data window keys**: `Signal` (1/-1/0), `Entry`, `SL`, `TP`, `Resistance`, `Support`, `Tests_R`, `Tests_S`, `Long_Count`, `Short_Count`, `Sig_Offer_Thin`, `Sig_Bid_Thin`, `Sig_Sweep_Up`, `Sig_Sweep_Dn`, `Sig_Bid_Stack`, `Sig_Offer_Stack`, `Sig_Print_Accel`, `Long_Ready`, `Short_Ready`
+- **Position sizing**: `min(round(100/|entry-SL|), 5000)` units — $100 max risk per trade (same model as other strategies).
+- **Skip criteria**: SL distance not in 5–30 pts. Email-log the skip reason.
+- **Expected**: Sparse — needs all 4 conditions (≥2 tests + 3 of 4 signals + breakout) to align. Likely 0–1 signals on quiet days, 1–2 on trending days. Lower frequency but higher conviction than the other strategies. R:R 2.0 means 34%+ WR = positive EV.
+
+**SPX500 Tape Reader (Trade Execution):**
+- Expression: `*/3 8-13 * * 1-5` — every 3 min, Mon–Fri, 8:00–13:59 CT
+- Job ID: **(create on next "start trading bot" — only if indicator is loaded on a chart)**
+- **Pre-req**: indicator must be visible on chart. By default it is NOT loaded (Basic plan 2-indicator limit). Cron must NOT be created unless user explicitly activates Tape Reader on a chart.
+- Cron prompt (one-line action when fired):
+  > Read `data_get_study_values study_filter="Tape Reader"`. If `Signal` is 0, exit silently. Otherwise: side = "BUY" if Signal=1 else "SELL". Pull `quote_get` for entry price. SL = indicator's `SL` key, TP = indicator's `TP` key. Compute `risk = |entry - SL|`. Skip with email log if risk < 5 or risk > 30. Units = `min(round(100/risk), 5000)`. Run `node scripts/place-trade.js {side} {units} {sl} {tp}` then `node scripts/notify-trade.js {side} {entry} {units} {sl} {tp}`. Indicator self-locks one-trade-per-day; no per-cron dedup needed.
+- R:R 2.0 — same risk model as ATM Strategy.
+
 ### SPX500 EMA200 Touch — RETIRED (overwritten 2026-05-21)
 - **Indicator**: "SPX500 EMA200 Touch" (Pine Script, separate pane)
 - **Asset**: OANDA:SPX500USD, 3m (same chart)
@@ -302,7 +420,23 @@ Each cron tick that produces a signal must run TWO scripts in order:
 - Job ID: **a29a8b45** (session-only — recreate on restart via "start trading bot")
 - **Time gating**: indicator self-locks; only fires Signal between 8:45-10:30 CT, max one signal per day
 - Action: Check time (skip if hour=8 AND min<45 — range still forming) → read Signal/OR_high/OR_low/Range_height/ATR_ORB + price → compute SL=opposite range side, TP=entry±1.5×Range_height (R:R 1.5) → validate SL 5–30 pts → place via place-trade.js → notify
-- Sole active strategy as of 2026-05-21 PM
+
+**SPX500 ATM Strategy (Trade Execution):**
+- Expression: `*/3 8-13 * * 1-5` — every 3 min, Mon–Fri, 8:00–13:59 CT
+- Job ID: **(create on next "start trading bot")**
+- **Time gating**: indicator self-gates window (8:45-12:00 + 12:45-14:00 CT). Cron skips evaluation if it's before 8:45 CT or in the 12:00-12:44 lunch window (Signal will be 0 anyway).
+- Cron prompt (one-line action when fired):
+  > Read `data_get_study_values study_filter="ATM Strategy"`. If `Signal` is 0, exit. Otherwise: side = "BUY" if Signal=1 else "SELL". Pull `quote_get` for entry. SL = `Last_PL` (long) or `Last_PH` (short). Compute `risk = |entry - SL|`. Skip with email log if risk < 5 or risk > 30. TP = `entry ± 2.0 × risk`. Units = `min(round(100/risk), 5000)`. Run `node scripts/place-trade.js {side} {units} {sl} {tp}` then `node scripts/notify-trade.js {side} {entry} {units} {sl} {tp}`. Indicator self-locks one-trade-per-day; no need to track in cron.
+- R:R 2.0 — sized for 33%+ break-even, target 50-60% WR
+
+**SPX500 Fib Scalper 1m (Trade Execution):**
+- Expression: `* 8-14 * * 1-5` — every minute, Mon–Fri, 8:00–14:59 CT (1m strategy needs 1m polling cadence)
+- Job ID: **(create on next "start trading bot")**
+- **Time gating**: indicator self-gates the 08:30–14:30 CT window. Cron does no extra gating.
+- **Pre-req**: chart must be on **1m** timeframe for this strategy to produce its expected 4–10 signals/day. On 3m the cron will run but signals will be sparse and slow. Either keep the chart on 1m all day, or accept the degraded performance.
+- Cron prompt (one-line action when fired):
+  > Read `data_get_study_values study_filter="Fib Scalper"`. If `Signal` is 0, exit silently. Otherwise: side = "BUY" if Signal=1 else "SELL". Pull `quote_get` for entry price. SL = indicator's `SL` key, TP = indicator's `TP` key. Compute `risk = |entry - SL|`. Skip with email log if risk < 5 or risk > 30. Units = `min(round(100/risk), 5000)`. Run `node scripts/place-trade.js {side} {units} {sl} {tp}` then `node scripts/notify-trade.js {side} {entry} {units} {sl} {tp}`. Indicator invalidates the setup on tag so no per-cron dedup needed.
+- R:R ~1.6 (from 0.618 entry default) — needs 38%+ WR for break-even.
 
 **Market Close (daily):**
 - Expression: `30 14 * * 1-5` — 2:30 PM CT
@@ -311,16 +445,19 @@ Each cron tick that produces a signal must run TWO scripts in order:
 - Reason: Avoid overnight gap risk (mandatory every trading day)
 
 **Noon Summary (daily):**
-- Expression: `0 12 * * 1-5` — 12:00 PM CT (noon)
-- Job ID: **336f5e69** (session-only — recreate on restart via "start trading bot")
+- Expression: `3 12 * * 1-5` — 12:03 PM CT (during lunch trade-skip window)
+- Job ID: **150388dd** (session-only — recreate on restart via "start trading bot")
 - Action: Email mid-day summary to castoldi@gmail.com with trades so far, P&L, outlook
 - Calls: `node scripts/send-summary-email.js "subject" "body"`
+- MANDATORY: send even on quiet days; cron prompt explicitly forbids skipping
 
 **EOD Summary (daily):**
-- Expression: `0 15 * * 1-5` — 3:00 PM CT
-- Job ID: **3e09636d** (session-only — recreate on restart via "start trading bot")
+- Expression: `35 14 * * 1-5` — 14:35 CT (5 min after market close)
+- Job ID: **24ef0677** (session-only — recreate on restart via "start trading bot")
 - Action: Email final summary to castoldi@gmail.com with all day's trades, P&L, analysis
 - Calls: `node scripts/send-summary-email.js "subject" "body"`
+- MANDATORY: send even on quiet days; cron prompt explicitly forbids skipping
+- Why 14:35 not 15:00: 3 PM CT was repeatedly missed because cron queues behind ongoing tool work. 14:35 lands during a quiet window right after market close.
 
 ### Pre-trade validation (MANDATORY — built into EMA Bounce Scalper indicator logic)
 The EMA Bounce Scalper indicator has momentum filtering built in (updated 2026-05-21):

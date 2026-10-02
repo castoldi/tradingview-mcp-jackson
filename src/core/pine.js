@@ -376,6 +376,145 @@ export async function save() {
   return { success: true, action: dialogHandled ? 'saved_with_dialog' : 'Ctrl+S_dispatched' };
 }
 
+export async function saveAs({ name }) {
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    throw new Error('Script name is required');
+  }
+  const editorReady = await ensurePineEditorOpen();
+  if (!editorReady) throw new Error('Could not open Pine Editor.');
+
+  // Primary path: call pine-facade directly to create a new slot. This works
+  // regardless of whether the editor is bound to an existing slot (Ctrl+S of a
+  // bound script silently writes back to that slot instead of opening the name
+  // dialog, which was the bug behind the original UI-only flow).
+  const escapedName = JSON.stringify(name.trim());
+  const apiResult = await evaluateAsync(`
+    (function() {
+      var m = ${FIND_MONACO};
+      if (!m) return { error: 'Monaco editor not found' };
+      var source = m.editor.getValue();
+      if (!source || !source.trim()) return { error: 'Editor is empty' };
+
+      var form = new FormData();
+      form.append('name', ${escapedName});
+      form.append('source', source);
+      form.append('pine_type', 'study');
+      form.append('pine_user', '');
+
+      return fetch('https://pine-facade.tradingview.com/pine-facade/save/', {
+        method: 'POST',
+        credentials: 'include',
+        body: form
+      })
+        .then(function(r) { return r.text().then(function(t) { return { status: r.status, body: t }; }); })
+        .then(function(out) {
+          try { out.json = JSON.parse(out.body); } catch (e) {}
+          return out;
+        })
+        .catch(function(e) { return { error: e.message }; });
+    })()
+  `);
+
+  if (apiResult && apiResult.status >= 200 && apiResult.status < 300) {
+    await new Promise(r => setTimeout(r, 800));
+    return {
+      success: true,
+      name: name.trim(),
+      action: 'save_as_new_script_via_api',
+      script_id: apiResult.json && (apiResult.json.scriptIdPart || apiResult.json.id) || null,
+    };
+  }
+
+  // UI fallback: send Ctrl+S and try to handle a Save dialog if one appears.
+  // This only works when the editor is genuinely unsaved (rare since most flows
+  // bind to a slot), but we keep it for safety.
+  const c = await getClient();
+  await c.Input.dispatchKeyEvent({ type: 'keyDown', modifiers: 2, key: 's', code: 'KeyS', windowsVirtualKeyCode: 83 });
+  await c.Input.dispatchKeyEvent({ type: 'keyUp', key: 's', code: 'KeyS' });
+  await new Promise(r => setTimeout(r, 900));
+
+  const escaped = JSON.stringify(name.trim());
+  const result = await evaluate(`
+    (function() {
+      var dialog = null;
+      var dialogs = document.querySelectorAll('[role="dialog"], [class*="dialog"], [class*="modal"], [class*="popup"]');
+      for (var i = 0; i < dialogs.length; i++) {
+        if (dialogs[i].offsetParent === null) continue;
+        if (dialogs[i].className && /editorBaseLayoutContainer-dialog/.test(dialogs[i].className)) continue;
+        var anyInput = Array.from(dialogs[i].querySelectorAll('input')).find(function(inp){ return inp.type === 'text' || !inp.type; });
+        if (anyInput) { dialog = dialogs[i]; break; }
+      }
+      if (!dialog) return { dialogFound: false };
+
+      var input = Array.from(dialog.querySelectorAll('input')).find(function(inp){ return inp.type === 'text' || !inp.type; });
+      if (!input) return { dialogFound: true, inputFound: false };
+
+      var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      nativeSetter.call(input, ${escaped});
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+
+      // Try to find a confirm button via several strategies, then fall back to
+      // dispatching Enter on the input (which submits the dialog form).
+      var btns = Array.from(dialog.querySelectorAll('button')).filter(function(b){ return b.offsetParent !== null && !b.disabled; });
+      var saveBtn = null;
+      // 1. Exact-text match (legacy)
+      for (var j = 0; j < btns.length; j++) {
+        var t = btns[j].textContent.trim();
+        if (/^(Save|OK|Create|Confirm|Done)$/i.test(t)) { saveBtn = btns[j]; break; }
+      }
+      // 2. Fuzzy text/aria/data-name match, avoiding cancel/close
+      if (!saveBtn) {
+        for (var k = 0; k < btns.length; k++) {
+          var meta = (btns[k].textContent + ' ' + (btns[k].getAttribute('aria-label')||'') + ' ' + (btns[k].getAttribute('data-name')||'')).toLowerCase();
+          if (/cancel|close|dismiss|reject/.test(meta)) continue;
+          if (/save|ok|create|confirm|submit|done/.test(meta)) { saveBtn = btns[k]; break; }
+        }
+      }
+      // 3. Primary submit button heuristic — the last non-cancel submit
+      if (!saveBtn) {
+        var submits = btns.filter(function(b){
+          var meta = (b.textContent + ' ' + (b.getAttribute('aria-label')||'')).toLowerCase();
+          return b.type === 'submit' && !/cancel|close|dismiss/.test(meta);
+        });
+        if (submits.length) saveBtn = submits[submits.length - 1];
+      }
+
+      if (saveBtn) {
+        saveBtn.click();
+        return { dialogFound: true, inputFound: true, buttonFound: true, buttonText: saveBtn.textContent.trim(), valueSet: input.value };
+      }
+
+      // 4. Final fallback: Enter on the input element submits most TV dialogs.
+      var enterEvt = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true });
+      input.dispatchEvent(enterEvt);
+      return { dialogFound: true, inputFound: true, buttonFound: false, fallback: 'enter_keypress', valueSet: input.value };
+    })()
+  `);
+
+  if (!result || !result.dialogFound) {
+    return {
+      success: false,
+      error: 'pine-facade API rejected the save and no Save dialog appeared. The editor is likely bound to an existing slot; use pine_save to update in place, or detach via the New File button first.',
+      api_status: apiResult && apiResult.status,
+      api_body: apiResult && apiResult.body && apiResult.body.slice(0, 200),
+    };
+  }
+  if (!result.inputFound) {
+    return { success: false, error: 'Save dialog appeared but name input field was not found.' };
+  }
+
+  await new Promise(r => setTimeout(r, 1200));
+  return {
+    success: true,
+    name: name.trim(),
+    action: result.buttonFound ? 'save_as_new_script' : 'save_as_via_enter_fallback',
+    button_clicked: result.buttonText,
+    fallback: result.fallback,
+    value_set: result.valueSet,
+  };
+}
+
 export async function getConsole() {
   const editorReady = await ensurePineEditorOpen();
   if (!editorReady) throw new Error('Could not open Pine Editor.');

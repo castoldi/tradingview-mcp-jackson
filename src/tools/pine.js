@@ -30,6 +30,13 @@ export function registerPineTools(server) {
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 
+  server.tool('pine_save_as', 'Save the current Pine Script as a NEW saved file with a specific name. Only works on unsaved scripts — call pine_new + pine_set_source first. Creates a new cloud slot so it does not overwrite previously saved scripts.', {
+    name: z.string().min(1).describe('Name for the new saved script (e.g. "SPX500 ATM Strategy")'),
+  }, async ({ name }) => {
+    try { return jsonResult(await core.saveAs({ name })); }
+    catch (err) { return jsonResult({ success: false, error: err.message }, true); }
+  });
+
   server.tool('pine_get_console', 'Read Pine Script console/log output (compile messages, log.info(), errors)', {}, async () => {
     try { return jsonResult(await core.getConsole()); }
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
