@@ -27,6 +27,17 @@ $tvExe = (Get-AppxPackage -Name "TradingView*").InstallLocation + "\TradingView.
 Start-Process $tvExe -ArgumentList "--remote-debugging-port=9222"
 ```
 
+## Git workflow — ALWAYS commit and push (added 2026-10-03)
+
+Every change to this repo (code, Pine scripts, `CLAUDE.md`, config) is committed and pushed in the same turn it's made. Don't ask first, and don't leave changes uncommitted at the end of a turn.
+
+1. Add a line to `CHANGELOG.md` under today's `## YYYY-MM-DD` heading (create it if missing), in **Added / Changed / Fixed / Removed**. Say what changed and why, and name the files.
+2. `git add` the specific files you changed, plus `CHANGELOG.md`. Never commit `.env`, `journal/` or other gitignored files.
+3. Commit with a short imperative subject (e.g. `Add trading journal`).
+4. `git push` to the current branch's upstream (`origin`, currently `trading-bot-3`). If the push fails, report the error. Never force-push, and never push to `upstream` (LewisWJackson's repo).
+
+Journal entries (`scripts/journal.js`) are data, not code changes. They stay local and don't need a commit.
+
 ## Decision Tree — Which Tool When
 
 ### "What's on my chart right now?"
@@ -248,6 +259,33 @@ Each cron tick that produces a signal must run TWO scripts in order:
 - Soft-fails (no crash) if credentials missing or SMTP error
 
 **Always run place-trade.js BEFORE notify-trade.js.** Email without a real order is misleading.
+
+### 3. Journal it — `scripts/journal.js`
+After notify-trade.js, run `node scripts/journal.js open ...` (see below). Every cron trade tick, skip and close also goes in the journal.
+
+## Trading Journal (added 2026-10-03)
+
+`scripts/journal.js` keeps the record of everything that happens when we trade: trades, the reasoning behind them, advice I give, market events, and lessons. Data is append-only in `journal/entries.jsonl`, with a readable day view regenerated at `journal/days/YYYY-MM-DD.md`. `journal/` is gitignored because it holds personal P&L. Times are shown in CT.
+
+**Log as it happens, in the same turn, without asking.** Don't batch entries for later.
+
+| When | Command |
+|------|---------|
+| Any trade placed (bot or user) | `node scripts/journal.js open <BUY\|SELL> <symbol> <entry> <units> <sl> <tp> --strategy "<name>" --source bot\|user "<why: signal values, levels, trend context>"` → prints the trade ID (`T-YYYYMMDD-n`) |
+| Trade closed (TP, SL, manual, 14:30 close) | `node scripts/journal.js close <tradeId> <exit> "<why it closed>"` → computes pts, R, $ P&L. Run `open-trades` to find IDs. |
+| Cron signal skipped (SL distance, time gate, etc.) | `node scripts/journal.js skip "<strategy>: <reason, with numbers>" --symbol <sym> --source bot` |
+| I answer "good time to long/short?" | `node scripts/journal.js advice <symbol> <LONG\|SHORT\|WAIT\|NO> "<trigger, invalidation, target, R:R, key reasons>" --entry P --sl P --tp P` |
+| Later we see how the advice played out | `node scripts/journal.js outcome <adviceId> <right\|wrong\|mixed\|untested> "<what happened>"` |
+| Top-down analysis done | `node scripts/journal.js analysis "<bias + key levels per TF>" --symbol <sym>` |
+| News, data releases, halts, tool/bot failures | `node scripts/journal.js event "<what>" [--tags macro,bot]` |
+| User decides something (sizing, skipping a setup, rule change) | `node scripts/journal.js decision "<what and why>" --source user` |
+| A takeaway worth keeping | `node scripts/journal.js lesson "<lesson>"` |
+
+- `node scripts/journal.js show [date]` prints the day view; `stats [--since YYYY-MM-DD] [--strategy S]` gives win rate, pts, P&L, avg R, profit factor by strategy, and the advice hit rate.
+- $ P&L is computed only for symbols with a known point value (`SYMBOL_MULT` in the script: `OANDA:SPX500USD` = $1/pt/unit). For futures such as NNQ, pass `--mult <$ per point per contract>` on `open`, after verifying it from the CME specs.
+- **Before giving advice or starting the bot**, run `stats --since <7 days ago>` and skim recent lessons, so past mistakes inform the next call.
+- **Noon/EOD summary emails** should be built from `journal.js show` output (trades, P&L, skips, events) instead of from memory.
+- **At the start of a session**, follow up on advice still pending (`stats` → `advice.pending`) by logging an `outcome` once the result is known.
 
 ## NNQ day-trading focus (added 2026-10-02)
 

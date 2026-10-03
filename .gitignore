@@ -12,3 +12,9 @@ discovery-log.json
 
 # Install-time symlink created by the one-shot setup
 AGENTS.md
+
+# Personal trading journal (P&L, reasoning) — scripts/journal.js writes here
+journal/
+
+# Claude Code per-session runtime lock
+.claude/scheduled_tasks.lock
