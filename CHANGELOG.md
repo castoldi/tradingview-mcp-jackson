@@ -15,6 +15,12 @@ Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / F
 - `scripts/place-order.js`: broker order entry for the NinjaTrader SIM account through TradingView's order panel. It locks to DEMO8197451, verifies qty/TP/SL by read-back and checks the button label before clicking. It also has `POSITIONS` and `CLOSE` (flatten). Added because the user asked Claude to trade NNQ for them in SIM, 1 contract.
 - `CLAUDE.md`: an "Autonomous NNQ trading in SIM" section.
 
+- `scripts/place-order.js`: `LIMIT`, `ORDERS`, `CANCEL` and `BALANCE` commands, and caps (risk <= 30 pts, net R:R >= 1.5 after 14.8 pts of SIM fees). A limit entry must rest 2+ pts away from the quote. Tab handling now uses the Account Manager tab ids. Tested live in SIM: placed a far limit with TP/SL, listed it, cancelled it (children cancelled too).
+- `scripts/nnq-cron-prompt.md`: the versioned prompt for the autonomous NNQ SIM cron, so it can be re-created after a restart.
+
+### Changed
+- NNQ SIM trading rules, after 3 straight stop-outs (-$19.28): limit-only entries at a level, stops sized to the noise, one pending order or position, a $15 daily loss cap, exits followed exactly as written, cron every 3 minutes instead of every minute. `CLAUDE.md` rewritten to match; the loss floor lives in `journal/levels.json`.
+
 ### Fixed
 - `scripts/nnq-scan.js`: now checks every bar since the previous scan and reports the last closed 15m candle. Before this it only looked at the latest 1m bar and missed the Plan B trigger (15m close above 31540).
 - NNQ scan cron: redraws the chart and rewrites `journal/levels.json` whenever the plan changes, because the chart was left showing stale setups after B triggered.
