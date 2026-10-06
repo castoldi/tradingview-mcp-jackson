@@ -238,3 +238,31 @@ if (argv.includes('--diag')) {
   probe(15, 3, 130, 8, '15m, len 3, leg >= 130');
   probe(5, 5, 45, 15, '5m, len 5, leg >= 45');
 }
+
+// ---------- bootstrap: could these results be luck? ----------
+if (argv.includes('--boot')) {
+  console.log('\n######## BOOTSTRAP (95% interval of the mean net pts per trade; resampling the trades 5,000 times) ########');
+  let seed = 12345; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+  const ci = arr => {
+    const n = arr.length; if (n < 5) return null;
+    const means = []; for (let k = 0; k < 5000; k++) { let s = 0; for (let i = 0; i < n; i++) s += arr[Math.floor(rnd() * n)]; means.push(s / n); }
+    means.sort((a, b) => a - b); const m = arr.reduce((a, b) => a + b, 0) / n;
+    const sd = Math.sqrt(arr.reduce((a, b) => a + (b - m) ** 2, 0) / (n - 1));
+    return { n, mean: +m.toFixed(1), lo: +means[125].toFixed(1), hi: +means[4875].toFixed(1), t: +(m / (sd / Math.sqrt(n))).toFixed(2) };
+  };
+  const line = (label, tr) => { const c = ci(tr.map(t => t.net)); console.log(`  ${label.padEnd(34)} ${c ? `n=${c.n} mean ${c.mean} pts  95% [${c.lo}, ${c.hi}]  t=${c.t}  ${c.lo > 0 ? 'EXCLUDES 0' : 'includes 0 (not distinguishable from luck)'}` : 'too few trades'}`); };
+  for (const [tf, len, minLeg, exp] of [[15, 3, 130, 8], [5, 5, 45, 15]]) {
+    console.log(`\n${tf}m, len ${len}, leg >= ${minLeg}, TP at the leg end, fees ${FEE}:`);
+    const evs = evFor(tf, len, minLeg);
+    const by = {};
+    for (const L of [0.3, 0.382, 0.45, 0.5, 0.55, 0.618, 0.7, 0.786]) by[L] = simulate(bars[tf], evs, { fee: FEE, L, tpExt: 0, slBuf: 2, expiry: exp }, []);
+    for (const L of Object.keys(by)) line(`level ${L}`, by[L]);
+    const fibSet = [0.382, 0.5, 0.618, 0.786], other = [0.3, 0.45, 0.55, 0.7];
+    line('FIB levels pooled', fibSet.flatMap(L => by[L]));
+    line('NON-fib levels pooled', other.flatMap(L => by[L]));
+    // same sample: gross (before fees) for the pooled sets
+    const g = set => set.flatMap(L => by[L]).map(t => t.gross);
+    const cf = ci(g(fibSet)), co = ci(g(other));
+    console.log(`  gross before fees: fib mean ${cf?.mean} pts vs non-fib ${co?.mean} pts`);
+  }
+}
