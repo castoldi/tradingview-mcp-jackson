@@ -307,6 +307,13 @@ The user also trades NNQ by hand in a **LIVE broker account `2039497`** (small, 
 - **Watch levels** live in `journal/levels.json` (gitignored), as `levels[] {price,name}` and `zones[] {lo,hi,name}`. Rewrite this file whenever the plan changes, so the scan watches today's levels.
 - **Every tick is logged**: `node scripts/scan-log.js <job> <quiet|alert|advice|trade|skip|error> "<what was done>" --price P` appends to `journal/scans.jsonl`. It reads token usage from this session's transcript, adding up every model call since the last user message containing `[cron:<job>]`. It prints the row, and the tick then writes that row to the Trade Book `runs` collection with `ArtifactData set`. Any other cron that should show up on the page uses the same pattern: start its prompt with `[cron:<job>]` and finish with `scan-log.js`, then `ArtifactData`. `scan-log.js today` prints today's totals by job.
 
+### Autonomous NNQ trading in SIM (added 2026-10-06)
+On 2026-10-06 the user asked Claude to trade NNQ for them in the **SIM account DEMO8197451, 1 contract only**, long or short, one position at a time. The 1-minute `[cron:nnq-scan]` cron does this. Never trade the LIVE account `2039497` this way.
+- Orders go through `node scripts/place-order.js <BUY|SELL> 1 <sl> <tp>`. Don't use `place-trade.js`, which was written for the SPX paper account and finds its fields by label text that can match the wrong input. `place-order.js` refuses unless the active account is DEMO8197451, sets qty/TP/SL by position, reads them back, and clicks only if the button reads `Buy 1 NNQZ6 MARKET`. It sends a market entry with broker-side SL/TP brackets. Use `--dry` to check the panel first, `POSITIONS` to list positions, and `CLOSE NNQ` to flatten (that also cancels the brackets).
+- The order panel kept a stale quantity (31,352) from earlier use, so always rely on the script's read-back check.
+- The open position is tracked in `journal/levels.json` under `position`. Flatten by 14:50 CT. No new entries after 14:30 CT or during the 11:30–12:45 lunch.
+- Each trade gets `journal.js open/close --source claude --mult 0.2`, an email via `notify-trade.js`, and, on close, a Trade Book `trades` doc with `account_type: SIM`.
+
 ### Entry plans go on the chart (added 2026-10-05)
 Whenever I give an entry plan ("buy now?", "is there a short?"), draw it on the TradingView chart in the same turn. Don't wait to be asked.
 - Use a `long_position` / `short_position` tool for each option (entry, SL, TP). `stopLevel`/`profitLevel` are in **ticks**: NNQ tick = **0.5**, so ticks = pts / 0.5. Use a `rectangle` for an entry zone and a dashed `horizontal_line` for a close-above/below trigger. Give each one a label naming the option and its condition.

@@ -12,6 +12,9 @@ Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / F
 - NNQ Trade Book page: a "Bot runs" section (today's runs, tokens, a per-run token chart and a runs table) backed by a new `runs` db collection.
 - `scripts/draw.js`: a CLI for chart drawings over CDP (list, remove, horizontal line, zone, long/short position), so cron ticks can redraw the plan without the MCP server.
 
+- `scripts/place-order.js`: broker order entry for the NinjaTrader SIM account through TradingView's order panel. It locks to DEMO8197451, verifies qty/TP/SL by read-back and checks the button label before clicking. It also has `POSITIONS` and `CLOSE` (flatten). Added because the user asked Claude to trade NNQ for them in SIM, 1 contract.
+- `CLAUDE.md`: an "Autonomous NNQ trading in SIM" section.
+
 ### Fixed
 - `scripts/nnq-scan.js`: now checks every bar since the previous scan and reports the last closed 15m candle. Before this it only looked at the latest 1m bar and missed the Plan B trigger (15m close above 31540).
 - NNQ scan cron: redraws the chart and rewrites `journal/levels.json` whenever the plan changes, because the chart was left showing stale setups after B triggered.
