@@ -6,7 +6,8 @@ import { evaluate, evaluateAsync, getClient } from '../connection.js';
 export async function create({ condition, price, message }) {
   const opened = await evaluate(`
     (function() {
-      var btn = document.querySelector('[aria-label="Create Alert"]')
+      var btn = document.querySelector('[aria-label="Create alert"]')
+        || document.querySelector('[aria-label="Create Alert"]')
         || document.querySelector('[data-name="alerts"]');
       if (btn) { btn.click(); return true; }
       return false;

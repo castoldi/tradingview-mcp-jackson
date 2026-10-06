@@ -15,6 +15,7 @@ Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / F
 - `scripts/journal.js`: added `CME_MINI:NNQ1!` = $0.20/pt to `SYMBOL_MULT` (CME E-nano spec), so NNQ trades get $ P&L without `--mult`.
 
 ### Fixed
+- `src/core/alerts.js`: alert creation now finds TradingView's current `Create alert` button (lowercase "a"); the old `Create Alert` selector matched nothing, so `alert_create` never opened the dialog.
 - `CLAUDE.md`: project path updated to `C:\Data\ai_projects\tradingview-mcp-jackson`. The launch instructions now use the PowerShell MSIX method, because the bat script is blocked by App Control, and kill any running instance first so CDP actually comes up. Also notes the MCP server path in `.mcp.json`, which was stale and stopped the MCP server from connecting.
 
 ## 2026-10-03
