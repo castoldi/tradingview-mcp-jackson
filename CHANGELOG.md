@@ -6,6 +6,13 @@ Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / F
 
 ## 2026-10-05
 
+### Added
+- `scripts/broker-fills.js`: reads the connected broker account's summary, filled orders and notifications log from TradingView's Account Manager via CDP, so the user's manual trades can be journaled without asking for fills.
+- `CLAUDE.md`: "Getting the user's real trades" section covering the live NNQ account, the fills script, how to log to `journal.js`, and how to update the NNQ Trade Book web page (its db collections and fields). Also notes NNQ costs: $0.20/pt and ~$1.88 round trip, about 9.4 pts to break even.
+
+### Changed
+- `scripts/journal.js`: added `CME_MINI:NNQ1!` = $0.20/pt to `SYMBOL_MULT` (CME E-nano spec), so NNQ trades get $ P&L without `--mult`.
+
 ### Fixed
 - `CLAUDE.md`: project path updated to `C:\Data\ai_projects\tradingview-mcp-jackson`. The launch instructions now use the PowerShell MSIX method, because the bat script is blocked by App Control, and kill any running instance first so CDP actually comes up. Also notes the MCP server path in `.mcp.json`, which was stale and stopped the MCP server from connecting.
 

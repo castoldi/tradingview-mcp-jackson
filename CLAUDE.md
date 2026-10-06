@@ -289,6 +289,19 @@ After notify-trade.js, run `node scripts/journal.js open ...` (see below). Every
 - **Noon/EOD summary emails** should be built from `journal.js show` output (trades, P&L, skips, events) instead of from memory.
 - **At the start of a session**, follow up on advice still pending (`stats` → `advice.pending`) by logging an `outcome` once the result is known.
 
+### Getting the user's real trades (added 2026-10-05)
+The user also trades NNQ by hand in a **LIVE broker account `2039497`** (small, ~$66) that is connected in TradingView. There is also a SIM account, `DEMO8197451`. This is separate from the SPX500 paper-trading bot. When the user says "I took the trade", "I'm out" or "what did I make", don't ask for fills. Read them from TradingView:
+1. `node scripts/broker-fills.js`. It reads the Account Manager's Account summary (Total P/L = **net realized P&L after fees**), the Orders tab (filled and cancelled orders, avg fill prices) and the Notifications log (every order placed, modified or executed, with timestamps). Trailing-stop moves appear there as "Stop Loss order modified". The script is read-only and returns the panel to Positions.
+2. Work out entry, exit, stop moves, slippage (stop price vs. fill) and fees (`fees = gross − broker net`, where gross = pts × $0.20 × qty for NNQ).
+3. Log it locally: `journal.js open ... --source user` and then `journal.js close <id> <exit> "<why, stop moves, slippage, fees>"`. If the trade followed advice, also log an `outcome` for that advice, plus a `lesson` when there is one.
+4. Add it to the **NNQ Trade Book** web page: https://claude.ai/artifact/MJtxbQg9nhRpMQWPBf6Ezk (private, live). Its data lives in the artifact's db, so write with `ArtifactData` (`batch` of `set`s, and pass `if_version` when updating an existing doc). Don't republish the page to add data. Collections and fields:
+   - `trades/<T-id>`: `id, date, entry_time, exit_time, symbol, contract, account_type (LIVE|SIM), side, qty, entry, exit, sl_initial, tp, high` (best price reached while in the trade), `stop_moves [{price,time}]` (the first entry is the initial SL), `pts, mult, gross, fees, net` (net = the broker's figure), `strategy, setup, exit_reason, lesson`
+   - `advice/<A-id>`: `id, date, time, verdict, entry, sl, tp, plan, outcome (""|right|wrong|mixed|untested), outcome_note`
+   - `notes/<L-or-E-id>`: `id, date, time, kind (Lesson|Event), text`
+   Use the same IDs as `journal.js`. New advice also goes on the page.
+
+**NNQ costs:** $0.20/pt, tick 0.5 = $0.10. A round trip costs about **$1.88 per contract** (measured 2026-10-05), which is **~9.4 pts to break even**. Stops are stop-market orders and slip a few pts overnight. Remind the user of this when they trail a stop to "just above entry".
+
 ## NNQ day-trading focus (added 2026-10-02)
 
 The user is interested in **day-trading opportunities in NNQ** (`CME_MINI:NNQ1!`, E-nano Nasdaq-100 Futures, continuous contract). When they ask about "NQ", "NNQ", "the Nasdaq" or "is it a good time to buy/short", analyze NNQ1! with a day-trading lens. This is discretionary analysis on request — there is no NNQ cron or automated execution; the SPX500 bot below is separate.

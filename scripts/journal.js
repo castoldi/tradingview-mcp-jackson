@@ -30,7 +30,7 @@ const DAYS = join(DIR, 'days');
 const TZ = 'America/Chicago';
 
 // Dollars per 1 point per 1 unit. Symbols not listed get no $ P&L unless --mult is passed.
-const SYMBOL_MULT = { 'OANDA:SPX500USD': 1 };
+const SYMBOL_MULT = { 'OANDA:SPX500USD': 1, 'CME_MINI:NNQ1!': 0.2 }; // NNQ: E-nano Nasdaq-100, $0.20/pt (CME spec)
 
 const PREFIX = {
   trade: 'T', exit: 'X', advice: 'A', outcome: 'O', analysis: 'N',
