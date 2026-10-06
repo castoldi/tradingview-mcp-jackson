@@ -4,6 +4,14 @@ Changes to this fork (`castoldi/tradingview-mcp-jackson`), newest first. Upstrea
 
 Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / Fixed / Removed**. Every commit adds its line here (see "Git workflow" in `CLAUDE.md`).
 
+## 2026-10-06
+
+### Added
+- `scripts/nnq-scan.js`: a quick NNQ scan for a 1-minute cron. It reads price and 1m/5m bars over CDP and flags watch levels from `journal/levels.json` that were touched or are nearby, so Claude only does a full analysis when price is at a level.
+- `scripts/scan-log.js`: logs each bot cron tick (what was done, plus token usage read from the Claude Code session transcript) to `journal/scans.jsonl` and prints the row for the Trade Book.
+- NNQ Trade Book page: a "Bot runs" section (today's runs, tokens, a per-run token chart and a runs table) backed by a new `runs` db collection.
+- `CLAUDE.md`: an "NNQ 1-minute scan + bot-run log" section, and the Trade Book's new `runs` collection.
+
 ## 2026-10-05
 
 ### Added
