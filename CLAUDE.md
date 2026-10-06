@@ -296,9 +296,14 @@ The user also trades NNQ by hand in a **LIVE broker account `2039497`** (small, 
 3. Log it locally: `journal.js open ... --source user` and then `journal.js close <id> <exit> "<why, stop moves, slippage, fees>"`. If the trade followed advice, also log an `outcome` for that advice, plus a `lesson` when there is one.
 4. Add it to the **NNQ Trade Book** web page: https://claude.ai/artifact/MJtxbQg9nhRpMQWPBf6Ezk (private, live). Its data lives in the artifact's db, so write with `ArtifactData` (`batch` of `set`s, and pass `if_version` when updating an existing doc). Don't republish the page to add data. Collections and fields:
    - `trades/<T-id>`: `id, date, entry_time, exit_time, symbol, contract, account_type (LIVE|SIM), side, qty, entry, exit, sl_initial, tp, high` (best price reached while in the trade), `stop_moves [{price,time}]` (the first entry is the initial SL), `pts, mult, gross, fees, net` (net = the broker's figure), `strategy, setup, exit_reason, lesson`
-   - `advice/<A-id>`: `id, date, time, verdict, entry, sl, tp, plan, outcome (""|right|wrong|mixed|untested), outcome_note`
    - `notes/<L-or-E-id>`: `id, date, time, kind (Lesson|Event), text`
-   Use the same IDs as `journal.js`. New advice also goes on the page.
+   Use the same IDs as `journal.js`. **The Trade Book holds only trades the user actually executed, plus lessons.** Planned entries, advice and setups that never triggered never go on the page. They stay in the local journal (`journal.js advice`/`outcome`) and on the chart.
+
+### Entry plans go on the chart (added 2026-10-05)
+Whenever I give an entry plan ("buy now?", "is there a short?"), draw it on the TradingView chart in the same turn. Don't wait to be asked.
+- Use a `long_position` / `short_position` tool for each option (entry, SL, TP). `stopLevel`/`profitLevel` are in **ticks**: NNQ tick = **0.5**, so ticks = pts / 0.5. Use a `rectangle` for an entry zone and a dashed `horizontal_line` for a close-above/below trigger. Give each one a label naming the option and its condition.
+- **Replace stale plans:** remove drawings for setups that are invalidated or superseded, so the chart only shows current options. Keep structural levels (ATH, trendlines). Drawing IDs are case-sensitive; read them from `listDrawings()` instead of retyping them. Drawings created through the API do not survive a TradingView restart (position tools especially).
+- Take one `capture_screenshot` to confirm the drawings sit at the right prices.
 
 **NNQ costs:** $0.20/pt, tick 0.5 = $0.10. A round trip costs about **$1.88 per contract** (measured 2026-10-05), which is **~9.4 pts to break even**. Stops are stop-market orders and slip a few pts overnight. Remind the user of this when they trail a stop to "just above entry".
 

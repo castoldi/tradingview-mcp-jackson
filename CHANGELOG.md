@@ -11,6 +11,7 @@ Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / F
 - `CLAUDE.md`: "Getting the user's real trades" section covering the live NNQ account, the fills script, how to log to `journal.js`, and how to update the NNQ Trade Book web page (its db collections and fields). Also notes NNQ costs: $0.20/pt and ~$1.88 round trip, about 9.4 pts to break even.
 
 ### Changed
+- `CLAUDE.md`: the NNQ Trade Book page is now only for executed trades and lessons; advice and planned entries stay in the local journal and on the chart. New "Entry plans go on the chart" rule: draw every entry option as a position tool (NNQ tick 0.5) and remove stale plans.
 - `scripts/journal.js`: added `CME_MINI:NNQ1!` = $0.20/pt to `SYMBOL_MULT` (CME E-nano spec), so NNQ trades get $ P&L without `--mult`.
 
 ### Fixed
