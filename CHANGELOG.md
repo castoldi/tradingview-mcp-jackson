@@ -4,6 +4,11 @@ Changes to this fork (`castoldi/tradingview-mcp-jackson`), newest first. Upstrea
 
 Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / Fixed / Removed**. Every commit adds its line here (see "Git workflow" in `CLAUDE.md`).
 
+## 2026-10-05
+
+### Fixed
+- `CLAUDE.md`: project path updated to `C:\Data\ai_projects\tradingview-mcp-jackson`. The launch instructions now use the PowerShell MSIX method, because the bat script is blocked by App Control, and kill any running instance first so CDP actually comes up. Also notes the MCP server path in `.mcp.json`, which was stale and stopped the MCP server from connecting.
+
 ## 2026-10-03
 
 ### Added

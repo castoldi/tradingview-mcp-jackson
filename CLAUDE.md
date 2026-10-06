@@ -8,7 +8,7 @@
 |---------|-------|
 | OS | Windows 11 Home 10.0.26200 |
 | User | `casto` |
-| Project path | `C:\users\casto\tradingview-mcp-jackson` |
+| Project path | `C:\Data\ai_projects\tradingview-mcp-jackson` (moved from `C:\users\casto\...` on 2026-10-05) |
 | Shell | PowerShell (pwsh) — default for all Bash/shell tool calls |
 | Node | Available at system PATH |
 
@@ -150,12 +150,14 @@ This closes the popup without navigating away. Do this before attempting any oth
 
 ### "TradingView isn't running" / "launch TradingView" / "start in debug mode"
 - **Do NOT use `tv_launch`** — it cannot find the MSIX app on this machine.
-- **Always run the bat script** (handles MSIX auto-detection, kills existing instances, waits for CDP ready):
+- The bat script (`scripts\launch_tv_debug.bat`) is blocked by App Control. Use PowerShell instead, and kill any running instance first: if TradingView is already open without the debug flag, a second launch just focuses that window and CDP never comes up.
   ```powershell
-  & "C:\users\casto\tradingview-mcp-jackson\scripts\launch_tv_debug.bat"
+  Stop-Process -Name TradingView -Force -ErrorAction SilentlyContinue; Start-Sleep 3
+  $tvExe = (Get-AppxPackage -Name "TradingView*").InstallLocation + "\TradingView.exe"
+  Start-Process $tvExe -ArgumentList "--remote-debugging-port=9222"
   ```
-  Optional custom port: `scripts\launch_tv_debug.bat 9223`
-- The script blocks until `http://localhost:9222/json/version` responds — when it returns, CDP is ready.
+- CDP is ready when `http://localhost:9222/json/version` responds (can take 1–2 min).
+- MCP server path in `C:\Users\casto\.claude\.mcp.json` must be `C:/Data/ai_projects/tradingview-mcp-jackson/src/server.js`. After changing it, run `/mcp` to reconnect. If the MCP tools are down but CDP is up, the `src/core/*.js` functions can be imported directly from a node script.
 - `tv_health_check` → verify connection after launch
 
 ### Autonomous trading — NEVER ask for confirmation
