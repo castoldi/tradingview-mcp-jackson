@@ -18,6 +18,9 @@ Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / F
 - `scripts/place-order.js`: `LIMIT`, `ORDERS`, `CANCEL` and `BALANCE` commands, and caps (risk <= 30 pts, net R:R >= 1.5 after 14.8 pts of SIM fees). A limit entry must rest 2+ pts away from the quote. Tab handling now uses the Account Manager tab ids. Tested live in SIM: placed a far limit with TP/SL, listed it, cancelled it (children cancelled too).
 - `scripts/nnq-cron-prompt.md`: the versioned prompt for the autonomous NNQ SIM cron, so it can be re-created after a restart.
 
+- `scripts/draw.js fib`: Fibonacci retracement drawing with the standard 0-at-the-extreme labels, verified on the chart.
+- `scripts/fib-data.js` (loads and merges 1m/5m/15m history) and `scripts/fib-backtest.js` (fib limit-entry strategies, single and multi-timeframe, train/test split, `--diag`): research tools only, they place no orders. `CLAUDE.md` has a "Fibonacci tools and research" section with the findings.
+
 ### Changed
 - NNQ SIM trader cron disabled by the user (about 11:35 CT); `CLAUDE.md` now says it stays off until they ask.
 - NNQ SIM trading rules, after 3 straight stop-outs (-$19.28): limit-only entries at a level, stops sized to the noise, one pending order or position, a $15 daily loss cap, exits followed exactly as written, cron every 3 minutes instead of every minute. `CLAUDE.md` rewritten to match; the loss floor lives in `journal/levels.json`.
