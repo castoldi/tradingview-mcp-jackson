@@ -29,6 +29,8 @@ Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / F
 
 - `CLAUDE.md`: closed trades on the review board are drawn with a readable width (about 15-25 min, no horizontal overlap) instead of their true duration; the user deleted the sliver-width boxes.
 
+- `scripts/draw.js`: `frame` (zoom to a CT window and price range) and `verify` (each position tool's entry must lie inside the bar at its drawn time), and the position tool's readout now sets the risk percent (not qty) so Qty reads 1 on every device. Found when the user's Android view showed Qty 3.259 / 4.124 / 9.669 and a zoomed-out piled-up desktop view. `CLAUDE.md` documents the workflow: draw, verify, frame, screenshot; no free-text verdict labels.
+
 ### Changed
 - NNQ SIM trader cron disabled by the user (about 11:35 CT); `CLAUDE.md` now says it stays off until they ask.
 - NNQ SIM trading rules, after 3 straight stop-outs (-$19.28): limit-only entries at a level, stops sized to the noise, one pending order or position, a $15 daily loss cap, exits followed exactly as written, cron every 3 minutes instead of every minute. `CLAUDE.md` rewritten to match; the loss floor lives in `journal/levels.json`.

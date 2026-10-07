@@ -9,6 +9,8 @@
 //   node scripts/draw.js long|short <entry> <sl> <tp> [--t0 <time>] [--tick 0.5] [--mins 105] [--qty 1] [--mult 0.2] [--balance 50]
 //        position tool WITH its P&L readout always on (Stop/Target in ticks and $, Open PnL, Qty, Risk/reward). --t0 puts it at a past
 //        time; --balance is the account value at entry (so the Amount lines show equity after the stop / target)
+//   node scripts/draw.js frame <from> <to> [--lo P --hi P]   zoom the chart to a CT window (and price range) so the drawings are in view
+//   node scripts/draw.js verify                               check every position tool's entry lies inside the bar at its drawn time
 //   node scripts/draw.js text <price> "<label>" [--t0 <time>] [--color #hex]
 //   node scripts/draw.js fib <legStartPrice> <legEndPrice> [--t0 <time>] [--t1 <time>] [--ext]
 //        Fibonacci retracement of an impulse leg, labeled the standard way: 0 at the leg END, 1 at the leg START
@@ -83,6 +85,27 @@ try {
       return { id: added[0].id };
     })()`, { awaitPromise: true });
     print({ ...res, leg: { from, to, t0, t1 }, up_leg: to > from, level_0618: +(to - 0.618 * (to - from)).toFixed(2), level_05: +(to - 0.5 * (to - from)).toFixed(2), level_0382: +(to - 0.382 * (to - from)).toFixed(2) });
+  } else if (cmd === 'frame') {
+    // draw.js frame <from> <to> [--lo 31470 --hi 31680]: put the chart on that CT window (and price range) so the drawings are in view
+    const lo = flag('--lo'), hi = flag('--hi');
+    const [fa, ta] = args; const f = parseT(fa), t = parseT(ta);
+    print(await evaluate(`(async function(){
+      var m = ${KNOWN_PATHS.chartApi}._chartWidget.model(); var b = m.mainSeries().bars(), i0 = b.firstIndex(), i1 = b.lastIndex(), from = null, to = null;
+      for (var i = i0; i <= i1; i++) { var v = b.valueAt(i); if (!v) continue; if (from === null && v[0] >= ${f}) from = i; if (v[0] <= ${t}) to = i; }
+      if (from === null || to === null) return { ok: false, error: 'those times are not loaded: load history first (zoom the time scale far left)' };
+      m.timeScale().zoomToBarsRange(from, to);
+      ${lo && hi ? `m.mainSeries().priceScale().setPriceRangeInPrice({ from: ${lo}, to: ${hi} });` : ''}
+      return { ok: true, from_idx: from, to_idx: to }; })()`, { awaitPromise: true }));
+  } else if (cmd === 'verify') {
+    // draw.js verify: for every position tool, check its entry price lies inside the 1m bar at its drawn time (catches wrong time / wrong price)
+    print(await evaluate(`(function(){
+      var api = ${KNOWN_PATHS.chartApi}, b = api._chartWidget.model().mainSeries().bars(), i0 = b.firstIndex(), i1 = b.lastIndex(), out = [];
+      api.getAllShapes().filter(function(s){ return /position/.test(s.name); }).forEach(function(s){
+        var pt = api.getShapeById(s.id).getPoints()[0], bar = null;
+        for (var i = i0; i <= i1; i++) { var v = b.valueAt(i); if (v && v[0] === pt.time) { bar = v; break; } }
+        out.push({ id: s.id, type: s.name, at: new Date(pt.time * 1000).toISOString().slice(0, 16) + 'Z', entry: pt.price, bar_low: bar && bar[3], bar_high: bar && bar[2],
+          ok: bar ? (pt.price >= bar[3] - 0.5 && pt.price <= bar[2] + 0.5) : null, note: bar ? '' : 'no bar at that time (clamped, or not loaded)' }); });
+      return out; })()`));
   } else if (cmd === 'text') {
     const t0a = flag('--t0'), color = flag('--color', '#17202b');
     const [price, label = ''] = args;
@@ -96,16 +119,22 @@ try {
     const res = await d.drawShape({ shape: cmd === 'long' ? 'long_position' : 'short_position',
       point: { time: t0, price: entry }, point2: { time: t0 + mins * 60, price: entry },
       overrides: { stopLevel: Math.round(Math.abs(entry - sl) / tick), profitLevel: Math.round(Math.abs(tp - entry) / tick) } });
-    // The position tool's P&L readout ("the pnl object"): always on, in contracts and real dollars.
-    // The tool already knows NNQ's $0.20/point, so with lotSize 1 and qty = contracts every figure is in real dollars:
-    // Stop/Target amounts, Open/Closed PnL (qty 1 = one contract; do NOT set lotSize to the point value, that multiplies twice).
-    // Amount = account value after the stop / target hits: accountSize -/+ dollars.
+    // The position tool's P&L readout ("the pnl object"), identical on desktop and Android.
+    // The tool DERIVES qty from accountSize x risk% / (stop distance x $0.20), and other devices recompute it that way, so setting qty
+    // directly only works on the machine that set it (the Android app showed Qty 3.259 / 4.124 / 9.669). Instead set the risk percent
+    // that makes the derived qty equal the contracts, each property as its own step (one combined call makes `risk` snap back to 25).
+    // lotSize stays 1: the tool already knows NNQ's $0.20 per point. Amount = account value in dollars after the stop / target hits.
+    let readback = null;
     if (res.entity_id) {
-      await evaluate(`(async function(){ var s = ${KNOWN_PATHS.chartApi}.getShapeById('${res.entity_id}');
-        s.setProperties({ alwaysShowStats:true, showPriceLabels:true, compact:false, riskDisplayMode:'money', accountSize:${balance}, lotSize:1 });
-        await new Promise(function(r){ setTimeout(r, 300); }); s.setProperties({ qty:${qty} }); })()`, { awaitPromise: true });
+      const riskPct = +((Math.abs(entry - sl) * mult * qty) / balance * 100).toFixed(4);
+      readback = await evaluate(`(async function(){ var s = ${KNOWN_PATHS.chartApi}.getShapeById('${res.entity_id}'); var w = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };
+        s.setProperties({ alwaysShowStats:true, showPriceLabels:true, compact:false, riskDisplayMode:'percents' }); await w(300);
+        s.setProperties({ accountSize:${balance} }); await w(300);
+        s.setProperties({ lotSize:1 }); await w(300);
+        s.setProperties({ risk:${riskPct} }); await w(500);
+        var p = s.getProperties(); return { qty: +p.qty.toFixed(3), risk_pct: p.risk, amount_after_stop: p.amountStop, amount_after_target: p.amountTarget }; })()`, { awaitPromise: true });
     }
-    print({ ...res, pnl_readout: { qty, dollars_per_point: mult, account_size: balance, stop_usd: +(Math.abs(entry - sl) * mult * qty).toFixed(2), target_usd: +(Math.abs(tp - entry) * mult * qty).toFixed(2) } });
+    print({ ...res, readback, qty_ok: readback ? Math.abs(readback.qty - qty) < 0.01 : false, pnl_readout: { qty, dollars_per_point: mult, account_size: balance, stop_usd: +(Math.abs(entry - sl) * mult * qty).toFixed(2), target_usd: +(Math.abs(tp - entry) * mult * qty).toFixed(2) } });
   } else {
     console.error('usage: draw.js list | rm <id...> | hline <price> "<label>" | zone <lo> <hi> "<label>" | long|short <entry> <sl> <tp>');
   }
