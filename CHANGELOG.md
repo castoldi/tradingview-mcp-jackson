@@ -33,6 +33,8 @@ Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / F
 
 - `scripts/alerts.js`: list, delete by id, create and `reset` (delete every alert on the chart's symbol, then create the new plan's alerts and wait for them to arm) over TradingView's alerts REST API. New standing rule in `CLAUDE.md`: whenever entry points are redone, delete the old alerts and create new ones. Deleted the three stale morning alerts (NNQ A/B/C).
 
+- Entry plans are drawn in the future area to the right of price, side by side (`CLAUDE.md`, cron prompt), after the user moved past-anchored boxes there by hand. New plan drawn at 21:12 CT: B short limit 31478 (SL 31496, TP 31412) and A long limit 31412 (SL 31393, TP 31480); alerts reset to those levels.
+
 ### Changed
 - NNQ SIM trader cron disabled by the user (about 11:35 CT); `CLAUDE.md` now says it stays off until they ask.
 - NNQ SIM trading rules, after 3 straight stop-outs (-$19.28): limit-only entries at a level, stops sized to the noise, one pending order or position, a $15 daily loss cap, exits followed exactly as written, cron every 3 minutes instead of every minute. `CLAUDE.md` rewritten to match; the loss floor lives in `journal/levels.json`.
