@@ -8,6 +8,10 @@ Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / F
 
 ### Added
 - `AGENTS.md`: a generic AI assistant entry point linking to `CLAUDE.md`; clarified in `CLAUDE.md` that it is the shared source of project instructions.
+- Pointer files for assistants that don't read `AGENTS.md`: `GEMINI.md`, `.github/copilot-instructions.md`, `.windsurfrules`, `.clinerules`, all sending them to `CLAUDE.md`. `CLAUDE.md` now explains how to connect other MCP clients (Cursor, Gemini CLI, VS Code, Codex) or use the CLI/scripts without MCP, and which steps are Claude-only.
+
+### Fixed
+- `.mcp.json` pointed at the pre-move path `C:/Users/casto/...`; now `C:/Data/ai_projects/...`. `.gitignore` no longer ignores `AGENTS.md`, which is now a tracked file.
 
 ### Changed
 - `CLAUDE.md`: "add new trades" always means analyze the current chart and draw new entry plans using the existing "mark entries" workflow, without asking for clarification; it does not request order execution or trade-history import.

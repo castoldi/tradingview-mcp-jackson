@@ -2,7 +2,7 @@
   "mcpServers": {
     "tradingview": {
       "command": "node",
-      "args": ["C:/Users/casto/tradingview-mcp-jackson/src/server.js"]
+      "args": ["C:/Data/ai_projects/tradingview-mcp-jackson/src/server.js"]
     }
   }
 }

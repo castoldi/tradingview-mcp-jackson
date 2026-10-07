@@ -22,6 +22,8 @@ This file is the shared source of project instructions for all AI assistants. Th
 ### MCP Server status
 The MCP server **is registered** at `C:\Users\casto\.claude\.mcp.json`. After restarting Claude Code, all 68 tools will be available — but only while TradingView is running with CDP enabled.
 
+**Other AI assistants** (pointer files `AGENTS.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.windsurfrules`, `.clinerules` all send them here): the same server works in any MCP client as `node C:/Data/ai_projects/tradingview-mcp-jackson/src/server.js` over stdio. Cursor (`.cursor/mcp.json`) and Gemini CLI (`~/.gemini/settings.json`) use the same `{"mcpServers":{"tradingview":{"command":"node","args":["<path>"]}}}` block; VS Code uses `.vscode/mcp.json` with `"servers"` and `"type":"stdio"`; Codex uses `[mcp_servers.tradingview]` in `~/.codex/config.toml`. An assistant without MCP can do everything through `node src/cli/index.js <command>` and `node scripts/*.js`, which talk to CDP directly. Claude-only tools mentioned below (CronCreate, ArtifactData for the Trade Book, SendUserFile) have no equivalent elsewhere: skip those steps, or ask the user.
+
 ### Launch TradingView on this machine (Windows)
 TradingView is installed as a Windows Store (MSIX) app. When the user says "launch tv" or asks to launch TradingView, run this PowerShell (the bat file is blocked by App Control):
 ```powershell

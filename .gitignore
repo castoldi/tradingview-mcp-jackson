@@ -10,9 +10,6 @@ discovery-log.json
 .env.*
 !.env.example
 
-# Install-time symlink created by the one-shot setup
-AGENTS.md
-
 # Personal trading journal (P&L, reasoning) — scripts/journal.js writes here
 journal/
 
