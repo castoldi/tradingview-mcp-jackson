@@ -6,6 +6,9 @@ Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / F
 
 ## 2026-10-07
 
+### Added
+- `AGENTS.md`: a generic AI assistant entry point linking to `CLAUDE.md`; clarified in `CLAUDE.md` that it is the shared source of project instructions.
+
 ### Changed
 - Stop-placement rule in `CLAUDE.md` and the cron prompt: beyond the swing the setup came from, not just past the level (two stops wicked by 1.5-2 pts on 10/06). Today's B short plan moved its stop from 31362 to 31375 (above the 05:00 swing high 31368) with the target extended to 31226; alerts reset.
 - `CLAUDE.md`: the LIVE account 2039497 is advice-only for now. Claude never places, modifies or cancels orders there, stops included; the user asked for this on 2026-10-07.

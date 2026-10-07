@@ -2,6 +2,8 @@
 
 68 tools for reading and controlling a live TradingView Desktop chart via CDP (port 9222).
 
+This file is the shared source of project instructions for all AI assistants. The root `AGENTS.md` links here; maintain instructions in this file rather than duplicating them there.
+
 ## Environment (this machine)
 
 | Setting | Value |
