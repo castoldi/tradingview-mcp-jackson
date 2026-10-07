@@ -347,7 +347,7 @@ When the user says "mark entries", "draw the entries" or "where would you enter"
 1. Delete the old plan boxes (`draw.js list` / `rm`); keep structural levels.
 2. For each option, `node scripts/draw.js long|short <entry> <sl> <tp> --qty 1 --balance <current balance>`, starting at the last candle and extending RIGHT; two options side by side (first from now, the next starting where the first ends + a few minutes), ~70 min wide each, compact badges, Qty 1.
 3. `node scripts/alerts.js reset --levels "<entry>:<option, entry, SL, TP>,<invalidation>:<option invalid>"` for each option.
-4. `node scripts/draw.js now --lo <below the lowest stop/target> --hi <above the highest>`, then one screenshot to check, and send it to the user.
+4. `node scripts/draw.js now --back 60 --ahead 150 --lo <below the lowest stop/target> --hi <above the highest>` (the default `--ahead 32` shows only the first box; two 70-min boxes need ~150 bars of empty space), then one screenshot to check, and send it to the user.
 5. Journal the plan (`journal.js advice`) and give the table: option, entry, stop, target, risk/reward net of fees.
 
 ### Stop placement: beyond the swing, not just beyond the level (user, 2026-10-07)
