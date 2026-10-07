@@ -6,7 +6,9 @@
 //   node scripts/draw.js rm <id> [id...]                        remove drawings (IDs are case-sensitive)
 //   node scripts/draw.js hline <price> "<label>" [--color #hex] [--dashed]
 //   node scripts/draw.js zone <lo> <hi> "<label>" [--color #hex] [--mins 120]
-//   node scripts/draw.js long|short <entry> <sl> <tp> [--t0 <time>] [--tick 0.5] [--mins 105]   position tool; ticks = pts / tick; --t0 puts it at a past time
+//   node scripts/draw.js long|short <entry> <sl> <tp> [--t0 <time>] [--tick 0.5] [--mins 105] [--qty 1] [--mult 0.2] [--balance 50]
+//        position tool WITH its P&L readout always on (Stop/Target in ticks and $, Open PnL, Qty, Risk/reward). --t0 puts it at a past
+//        time; --balance is the account value at entry (so the Amount lines show equity after the stop / target)
 //   node scripts/draw.js text <price> "<label>" [--t0 <time>] [--color #hex]
 //   node scripts/draw.js fib <legStartPrice> <legEndPrice> [--t0 <time>] [--t1 <time>] [--ext]
 //        Fibonacci retracement of an impulse leg, labeled the standard way: 0 at the leg END, 1 at the leg START
@@ -88,11 +90,22 @@ try {
       overrides: { color, textColor: color, fontsize: 12, bold: true } }));
   } else if (cmd === 'long' || cmd === 'short') {
     const tick = +flag('--tick', 0.5), mins = +flag('--mins', 105), t0a = flag('--t0');
+    const qty = +flag('--qty', 1), mult = +flag('--mult', 0.2), balance = +flag('--balance', 50); // NNQ = $0.20 per point
     const [entry, sl, tp] = args.map(Number);
     const t0 = parseT(t0a, now());
-    print(await d.drawShape({ shape: cmd === 'long' ? 'long_position' : 'short_position',
+    const res = await d.drawShape({ shape: cmd === 'long' ? 'long_position' : 'short_position',
       point: { time: t0, price: entry }, point2: { time: t0 + mins * 60, price: entry },
-      overrides: { stopLevel: Math.round(Math.abs(entry - sl) / tick), profitLevel: Math.round(Math.abs(tp - entry) / tick) } }));
+      overrides: { stopLevel: Math.round(Math.abs(entry - sl) / tick), profitLevel: Math.round(Math.abs(tp - entry) / tick) } });
+    // The position tool's P&L readout ("the pnl object"): always on, in contracts and real dollars.
+    // The tool already knows NNQ's $0.20/point, so with lotSize 1 and qty = contracts every figure is in real dollars:
+    // Stop/Target amounts, Open/Closed PnL (qty 1 = one contract; do NOT set lotSize to the point value, that multiplies twice).
+    // Amount = account value after the stop / target hits: accountSize -/+ dollars.
+    if (res.entity_id) {
+      await evaluate(`(async function(){ var s = ${KNOWN_PATHS.chartApi}.getShapeById('${res.entity_id}');
+        s.setProperties({ alwaysShowStats:true, showPriceLabels:true, compact:false, riskDisplayMode:'money', accountSize:${balance}, lotSize:1 });
+        await new Promise(function(r){ setTimeout(r, 300); }); s.setProperties({ qty:${qty} }); })()`, { awaitPromise: true });
+    }
+    print({ ...res, pnl_readout: { qty, dollars_per_point: mult, account_size: balance, stop_usd: +(Math.abs(entry - sl) * mult * qty).toFixed(2), target_usd: +(Math.abs(tp - entry) * mult * qty).toFixed(2) } });
   } else {
     console.error('usage: draw.js list | rm <id...> | hline <price> "<label>" | zone <lo> <hi> "<label>" | long|short <entry> <sl> <tp>');
   }

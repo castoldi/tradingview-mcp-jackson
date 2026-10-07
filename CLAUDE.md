@@ -340,6 +340,13 @@ When the user asks to "review the entries" or "draw the entries on the board", d
 - **Fitting the stops and targets in view:** `chart._chartWidget.model().mainSeries().priceScale().setPriceRangeInPrice({from, to})` sets the visible price range (auto-scale off); the time range is set with `timeScale().zoomToBarsRange(fromIdx, toIdx)`.
 - After a TradingView relaunch a NinjaTrader login popup may open. Close it (never enter credentials); the broker reconnect is the user's to do.
 
+### Always use the position tool with its P&L readout (user instruction, 2026-10-06)
+Every entry plan, pending limit order, open trade and closed trade is drawn with the **long/short position tool with its P&L readout on** ("the pnl object", like the tool the user showed from their phone: `Stop: 30.0 (0.095%) 60, Amount: ...`, `Target: ...`, `Open PnL: ..., Qty: ..., Risk/reward ratio: ...`). Never plain lines or rectangles for a trade or plan.
+- **Command:** `node scripts/draw.js long|short <entry> <sl> <tp> [--t0 <time>] [--mins N] [--qty 1] [--balance <account value at entry>]`. It turns `alwaysShowStats` on and sets `accountSize` = the balance, `lotSize` = 1, `qty` = contracts, `riskDisplayMode` = money. The tool already knows NNQ's $0.20 per point, so do NOT set lotSize to 0.2 (it multiplies twice).
+- **How to read the labels:** `Stop`/`Target` show points, percent and ticks, and **Amount = account value in dollars after the stop / target hits** (balance -/+ points x $0.20 x qty). `Open/Closed PnL` is in index points x qty (multiply by $0.20 for dollars). `Risk/reward` is from the ticks, before fees, so compare it with the net R:R after the 14.8-pt SIM fees.
+- **Live trades:** draw the tool at the fill with the real SL/TP, and replace it when the stop or target is moved. **Closed trades:** keep the tool on the chart as the record (`--t0` at the fill time, `--mins` = how long it was open).
+- Per-contract dollars, fees and net still come from the journal and the broker's balance change (the broker's Total P/L summary lags); the tool's readout is the on-chart view.
+
 ### Entry plans go on the chart (added 2026-10-05)
 Whenever I give an entry plan ("buy now?", "is there a short?"), draw it on the TradingView chart in the same turn. Don't wait to be asked.
 - Use a `long_position` / `short_position` tool for each option (entry, SL, TP). `stopLevel`/`profitLevel` are in **ticks**: NNQ tick = **0.5**, so ticks = pts / 0.5. Use a `rectangle` for an entry zone and a dashed `horizontal_line` for a close-above/below trigger. Give each one a label naming the option and its condition.

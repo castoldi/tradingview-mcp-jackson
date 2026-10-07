@@ -25,6 +25,8 @@ Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / F
 
 - `scripts/draw.js`: `--t0 <time>` for long/short position tools (draw past trades at their real time) and a `text <price> "<label>"` command. Used to draw the day's 3 SIM trades on the chart; `CLAUDE.md` has a "Trade review board" section with the clamping gotcha.
 
+- `scripts/draw.js long|short` now turns the position tool's P&L readout on by default (Stop/Target amounts in dollars, Open/Closed PnL, Qty, Risk/reward) with `--qty`, `--mult`, `--balance`; the day's 3 SIM trades on the chart were updated to show it. `CLAUDE.md` and `scripts/nnq-cron-prompt.md` now say: always use the position tool with its P&L readout for every plan and trade.
+
 ### Changed
 - NNQ SIM trader cron disabled by the user (about 11:35 CT); `CLAUDE.md` now says it stays off until they ask.
 - NNQ SIM trading rules, after 3 straight stop-outs (-$19.28): limit-only entries at a level, stops sized to the noise, one pending order or position, a $15 daily loss cap, exits followed exactly as written, cron every 3 minutes instead of every minute. `CLAUDE.md` rewritten to match; the loss floor lives in `journal/levels.json`.
