@@ -4,6 +4,11 @@ Changes to this fork (`castoldi/tradingview-mcp-jackson`), newest first. Upstrea
 
 Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / Fixed / Removed**. Every commit adds its line here (see "Git workflow" in `CLAUDE.md`).
 
+## 2026-10-07
+
+### Changed
+- Stop-placement rule in `CLAUDE.md` and the cron prompt: beyond the swing the setup came from, not just past the level (two stops wicked by 1.5-2 pts on 10/06). Today's B short plan moved its stop from 31362 to 31375 (above the 05:00 swing high 31368) with the target extended to 31226; alerts reset.
+
 ## 2026-10-06
 
 ### Added

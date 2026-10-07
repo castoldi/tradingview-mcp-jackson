@@ -350,6 +350,12 @@ When the user says "mark entries", "draw the entries" or "where would you enter"
 4. `node scripts/draw.js now --lo <below the lowest stop/target> --hi <above the highest>`, then one screenshot to check, and send it to the user.
 5. Journal the plan (`journal.js advice`) and give the table: option, entry, stop, target, risk/reward net of fees.
 
+### Stop placement: beyond the swing, not just beyond the level (user, 2026-10-07)
+The stop goes beyond the **swing high (for shorts) or swing low (for longs) that the setup came from**, plus a buffer of a few points past any round number, NOT just a few points past the entry level. A level is where the stop orders cluster, and a thin market wicks 2-10 pts through it before the real move.
+- Evidence: 10/06 T2 short (SL 31598, 8 pts above 31590) and the 10/06-07 overnight B short (SL 31496): both stopped by a 1.5-2 pt wick, both followed by the move in our direction (B: down 280 pts to 31219). The correct B stop was above the 20:30-20:40 swing highs 31507-31507.5, i.e. ~31512.
+- Then choose the target from structure so the trade still clears 1.5R net of the 14.8-pt SIM fee. If no structural target makes it, skip the trade: a stop inside the noise is not a fix for poor R:R.
+- Check before drawing: list the swing highs/lows of the last 2-4 hours on 5m and confirm the stop is beyond the nearest one on the wrong side.
+
 ### Always use the position tool with its P&L readout (user instruction, 2026-10-06)
 Every entry plan, pending limit order, open trade and closed trade is drawn with the **long/short position tool with its P&L readout on** ("the pnl object", like the tool the user showed from their phone: `Stop: 30.0 (0.095%) 60, Amount: ...`, `Target: ...`, `Open PnL: ..., Qty: ..., Risk/reward ratio: ...`). Never plain lines or rectangles for a trade or plan.
 - **Command:** `node scripts/draw.js long|short <entry> <sl> <tp> [--t0 <time>] [--mins N] [--qty 1] [--balance <account value at entry>]`. It turns `alwaysShowStats` on and sets `riskDisplayMode` = percents, `accountSize` = the balance, `lotSize` = 1, then `risk` = |entry - sl| x $0.20 x qty / balance x 100, **each as its own step** (one combined call makes `risk` snap back to 25). The tool already knows NNQ's $0.20 per point, so do NOT set lotSize to 0.2 (it multiplies twice).
