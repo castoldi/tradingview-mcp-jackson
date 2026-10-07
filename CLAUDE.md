@@ -334,6 +334,12 @@ On 2026-10-06 the user asked Claude to trade NNQ for them in the **SIM account D
 - **Bootstrap check (`--boot`, 2026-10-06):** every single level's 95% interval for net pts per trade includes 0 on both 15m and 5m. Pooling the fib levels (0.382/0.5/0.618/0.786) vs arbitrary non-fib levels (0.3/0.45/0.55/0.7) on the same legs gave 15.7 vs 11.4 pts per trade on 15m (95% [-0.2, 31.7] vs [-3.2, 25.8]) and 6.6 vs 5.3 on 5m. The trades overlap (same legs), so even those intervals are too tight. Verdict so far: the 15m "buy or sell the pullback of a big leg" idea is worth watching, but nothing separates fib levels from other levels and nothing is statistically distinguishable from luck at this sample size (about 25 legs on 15m).
 - Nothing here places orders. The trader cron is still OFF (see the SIM section).
 
+### Trade review board (added 2026-10-06)
+When the user asks to "review the entries" or "draw the entries on the board", draw every trade of the day on the 1m chart at its real time: `node scripts/draw.js long|short <entry> <sl> <tp> --t0 "YYYY-MM-DD HH:MM" --mins <minutes open>` for each trade, plus `node scripts/draw.js text <price> "<verdict>" --t0 "<time>" --color "#b3372f"` labels, then frame the window and take one screenshot.
+- **Gotcha:** a drawing's time is clamped to the first bar TradingView has loaded. After a restart the chart holds only ~400 bars, so first load history (zoom the time scale far left, see `scripts/fib-data.js`) and only then draw, or the shapes pile up at "now".
+- **Fitting the stops and targets in view:** `chart._chartWidget.model().mainSeries().priceScale().setPriceRangeInPrice({from, to})` sets the visible price range (auto-scale off); the time range is set with `timeScale().zoomToBarsRange(fromIdx, toIdx)`.
+- After a TradingView relaunch a NinjaTrader login popup may open. Close it (never enter credentials); the broker reconnect is the user's to do.
+
 ### Entry plans go on the chart (added 2026-10-05)
 Whenever I give an entry plan ("buy now?", "is there a short?"), draw it on the TradingView chart in the same turn. Don't wait to be asked.
 - Use a `long_position` / `short_position` tool for each option (entry, SL, TP). `stopLevel`/`profitLevel` are in **ticks**: NNQ tick = **0.5**, so ticks = pts / 0.5. Use a `rectangle` for an entry zone and a dashed `horizontal_line` for a close-above/below trigger. Give each one a label naming the option and its condition.

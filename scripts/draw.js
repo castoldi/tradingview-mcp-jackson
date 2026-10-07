@@ -6,7 +6,8 @@
 //   node scripts/draw.js rm <id> [id...]                        remove drawings (IDs are case-sensitive)
 //   node scripts/draw.js hline <price> "<label>" [--color #hex] [--dashed]
 //   node scripts/draw.js zone <lo> <hi> "<label>" [--color #hex] [--mins 120]
-//   node scripts/draw.js long|short <entry> <sl> <tp> [--tick 0.5] [--mins 105]   position tool; ticks = pts / tick
+//   node scripts/draw.js long|short <entry> <sl> <tp> [--t0 <time>] [--tick 0.5] [--mins 105]   position tool; ticks = pts / tick; --t0 puts it at a past time
+//   node scripts/draw.js text <price> "<label>" [--t0 <time>] [--color #hex]
 //   node scripts/draw.js fib <legStartPrice> <legEndPrice> [--t0 <time>] [--t1 <time>] [--ext]
 //        Fibonacci retracement of an impulse leg, labeled the standard way: 0 at the leg END, 1 at the leg START
 //        (so for an up-leg low->high, 0.618 sits 61.8% of the way back down from the high). Levels 0 / .382 / .5 /
@@ -22,6 +23,19 @@ const flag = (name, dflt) => { const i = args.indexOf(name); if (i < 0) return d
 const bool = name => { const i = args.indexOf(name); if (i < 0) return false; args.splice(i, 1); return true; };
 const now = () => Math.floor(Date.now() / 1000);
 const print = o => console.log(JSON.stringify(o));
+
+  const parseT = (x, dflt) => {
+    if (x == null) return dflt;
+    if (/^\d{9,}$/.test(x)) return Number(x);
+    const m = x.match(/^(?:(\d{4})-(\d{2})-(\d{2}) )?(\d{1,2}):(\d{2})$/);
+    if (!m) throw new Error('bad time: ' + x);
+    const nowD = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+    const y = m[1] ? +m[1] : nowD.getFullYear(), mo = m[2] ? +m[2] : nowD.getMonth() + 1, da = m[3] ? +m[3] : nowD.getDate();
+    // hours to ADD to a Central Time wall clock to get UTC (5 in CDT, 6 in CST) for that calendar day
+    const ctNoonHour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', hourCycle: 'h23' }).format(new Date(Date.UTC(y, mo - 1, da, 12))));
+    const off = 12 - ctNoonHour;
+    return Date.UTC(y, mo - 1, da, +m[4] + off, +m[5]) / 1000;
+  };
 
 try {
   const cmd = args.shift();
@@ -48,18 +62,6 @@ try {
   } else if (cmd === 'fib') {
     const ext = bool('--ext');
     const t0a = flag('--t0'), t1a = flag('--t1');
-    const parseT = (x, dflt) => {
-      if (x == null) return dflt;
-      if (/^\d{9,}$/.test(x)) return Number(x);
-      const m = x.match(/^(?:(\d{4})-(\d{2})-(\d{2}) )?(\d{1,2}):(\d{2})$/);
-      if (!m) throw new Error('bad time: ' + x);
-      const nowD = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }));
-      const y = m[1] ? +m[1] : nowD.getFullYear(), mo = m[2] ? +m[2] : nowD.getMonth() + 1, da = m[3] ? +m[3] : nowD.getDate();
-      // hours to ADD to a Central Time wall clock to get UTC (5 in CDT, 6 in CST) for that calendar day
-      const ctNoonHour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', hourCycle: 'h23' }).format(new Date(Date.UTC(y, mo - 1, da, 12))));
-      const off = 12 - ctNoonHour;
-      return Date.UTC(y, mo - 1, da, +m[4] + off, +m[5]) / 1000;
-    };
     const [from, to] = args.map(Number);
     const t1 = parseT(t1a, now()), t0 = parseT(t0a, t1 - 1800);
     const res = await evaluate(`(async function(){
@@ -79,11 +81,17 @@ try {
       return { id: added[0].id };
     })()`, { awaitPromise: true });
     print({ ...res, leg: { from, to, t0, t1 }, up_leg: to > from, level_0618: +(to - 0.618 * (to - from)).toFixed(2), level_05: +(to - 0.5 * (to - from)).toFixed(2), level_0382: +(to - 0.382 * (to - from)).toFixed(2) });
+  } else if (cmd === 'text') {
+    const t0a = flag('--t0'), color = flag('--color', '#17202b');
+    const [price, label = ''] = args;
+    print(await d.drawShape({ shape: 'text', point: { time: parseT(t0a, now()), price: +price }, text: label,
+      overrides: { color, textColor: color, fontsize: 12, bold: true } }));
   } else if (cmd === 'long' || cmd === 'short') {
-    const tick = +flag('--tick', 0.5), mins = +flag('--mins', 105);
+    const tick = +flag('--tick', 0.5), mins = +flag('--mins', 105), t0a = flag('--t0');
     const [entry, sl, tp] = args.map(Number);
+    const t0 = parseT(t0a, now());
     print(await d.drawShape({ shape: cmd === 'long' ? 'long_position' : 'short_position',
-      point: { time: now(), price: entry }, point2: { time: now() + mins * 60, price: entry },
+      point: { time: t0, price: entry }, point2: { time: t0 + mins * 60, price: entry },
       overrides: { stopLevel: Math.round(Math.abs(entry - sl) / tick), profitLevel: Math.round(Math.abs(tp - entry) / tick) } }));
   } else {
     console.error('usage: draw.js list | rm <id...> | hline <price> "<label>" | zone <lo> <hi> "<label>" | long|short <entry> <sl> <tp>');
