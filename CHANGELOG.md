@@ -35,6 +35,8 @@ Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / F
 
 - Entry plans are drawn in the future area to the right of price, side by side (`CLAUDE.md`, cron prompt), after the user moved past-anchored boxes there by hand. New plan drawn at 21:12 CT: B short limit 31478 (SL 31496, TP 31412) and A long limit 31412 (SL 31393, TP 31480); alerts reset to those levels.
 
+- `scripts/draw.js now`: zoom/scroll to the latest candles plus empty space on the right for plan boxes. `CLAUDE.md` and the cron prompt: moving the view is allowed and every plan drawing ends with `now` + a screenshot; the approved layout is recorded.
+
 ### Changed
 - NNQ SIM trader cron disabled by the user (about 11:35 CT); `CLAUDE.md` now says it stays off until they ask.
 - NNQ SIM trading rules, after 3 straight stop-outs (-$19.28): limit-only entries at a level, stops sized to the noise, one pending order or position, a $15 daily loss cap, exits followed exactly as written, cron every 3 minutes instead of every minute. `CLAUDE.md` rewritten to match; the loss floor lives in `journal/levels.json`.

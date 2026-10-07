@@ -10,6 +10,7 @@
 //        position tool WITH its P&L readout always on (Stop/Target in ticks and $, Open PnL, Qty, Risk/reward). --t0 puts it at a past
 //        time; --balance is the account value at entry (so the Amount lines show equity after the stop / target)
 //   node scripts/draw.js frame <from> <to> [--lo P --hi P]   zoom the chart to a CT window (and price range) so the drawings are in view
+//   node scripts/draw.js now [--back 40] [--ahead 32] [--lo P --hi P]  zoom to the latest candles + empty space on the right (where plans go)
 //   node scripts/draw.js verify                               check every position tool's entry lies inside the bar at its drawn time
 //   node scripts/draw.js text <price> "<label>" [--t0 <time>] [--color #hex]
 //   node scripts/draw.js fib <legStartPrice> <legEndPrice> [--t0 <time>] [--t1 <time>] [--ext]
@@ -85,6 +86,14 @@ try {
       return { id: added[0].id };
     })()`, { awaitPromise: true });
     print({ ...res, leg: { from, to, t0, t1 }, up_leg: to > from, level_0618: +(to - 0.618 * (to - from)).toFixed(2), level_05: +(to - 0.5 * (to - from)).toFixed(2), level_0382: +(to - 0.382 * (to - from)).toFixed(2) });
+  } else if (cmd === 'now') {
+    // draw.js now [--back 40] [--ahead 32] [--lo P --hi P]: scroll/zoom to the most recent candles plus empty space on the right for plans
+    const back = +flag('--back', 40), ahead = +flag('--ahead', 32), lo = flag('--lo'), hi = flag('--hi');
+    print(await evaluate(`(function(){ var m = ${KNOWN_PATHS.chartApi}._chartWidget.model(); var l = m.mainSeries().bars().lastIndex();
+      m.timeScale().zoomToBarsRange(l - ${back}, l + ${ahead});
+      ${lo && hi ? `m.mainSeries().priceScale().setPriceRangeInPrice({ from: ${lo}, to: ${hi} });` : ''}
+      try { ${KNOWN_PATHS.chartApi}.selection().clear(); } catch (e) {}
+      return { ok: true, last_idx: l }; })()`));
   } else if (cmd === 'frame') {
     // draw.js frame <from> <to> [--lo 31470 --hi 31680]: put the chart on that CT window (and price range) so the drawings are in view
     const lo = flag('--lo'), hi = flag('--hi');
