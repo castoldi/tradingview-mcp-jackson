@@ -36,6 +36,8 @@ Every change to this repo (code, Pine scripts, `CLAUDE.md`, config) is committed
 3. Commit with a short imperative subject (e.g. `Add trading journal`).
 4. `git push` to the current branch's upstream (`origin`, currently `trading-bot-3`). If the push fails, report the error. Never force-push, and never push to `upstream` (LewisWJackson's repo).
 
+**Keep the AI instructions current, always (user, 2026-10-06):** any new rule, workflow, script behavior or correction from the user goes into `CLAUDE.md` (and `scripts/nnq-cron-prompt.md` and the memory notes when they apply) in the SAME turn, then commit and push. Do not wait to be asked.
+
 Journal entries (`scripts/journal.js`) are data, not code changes. They stay local and don't need a commit.
 
 ## Decision Tree — Which Tool When
