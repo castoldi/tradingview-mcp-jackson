@@ -293,6 +293,7 @@ After notify-trade.js, run `node scripts/journal.js open ...` (see below). Every
 
 ### Getting the user's real trades (added 2026-10-05)
 The user also trades NNQ by hand in a **LIVE broker account `2039497`** (small, ~$66) that is connected in TradingView. There is also a SIM account, `DEMO8197451`. This is separate from the SPX500 paper-trading bot. When the user says "I took the trade", "I'm out" or "what did I make", don't ask for fills. Read them from TradingView:
+**Advice only on LIVE (user, 2026-10-07: "do not trade for me since its live account, just advice ... for now"):** never place, modify or cancel orders in `2039497`, including moving stops. Give the levels, draw the plan, set alerts; the user clicks.
 1. `node scripts/broker-fills.js`. It reads the Account Manager's Account summary (Total P/L = **net realized P&L after fees**), the Orders tab (filled and cancelled orders, avg fill prices) and the Notifications log (every order placed, modified or executed, with timestamps). Trailing-stop moves appear there as "Stop Loss order modified". The script is read-only and returns the panel to Positions.
 2. Work out entry, exit, stop moves, slippage (stop price vs. fill) and fees (`fees = gross − broker net`, where gross = pts × $0.20 × qty for NNQ).
 3. Log it locally: `journal.js open ... --source user` and then `journal.js close <id> <exit> "<why, stop moves, slippage, fees>"`. If the trade followed advice, also log an `outcome` for that advice, plus a `lesson` when there is one.

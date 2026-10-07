@@ -8,6 +8,7 @@ Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / F
 
 ### Changed
 - Stop-placement rule in `CLAUDE.md` and the cron prompt: beyond the swing the setup came from, not just past the level (two stops wicked by 1.5-2 pts on 10/06). Today's B short plan moved its stop from 31362 to 31375 (above the 05:00 swing high 31368) with the target extended to 31226; alerts reset.
+- `CLAUDE.md`: the LIVE account 2039497 is advice-only for now. Claude never places, modifies or cancels orders there, stops included; the user asked for this on 2026-10-07.
 - "Mark entries" step 4 in `CLAUDE.md`: frame with `draw.js now --back 60 --ahead 150`, because the default `--ahead 32` hid the second plan box off-screen (10/07 09:05 redo).
 
 ## 2026-10-06
