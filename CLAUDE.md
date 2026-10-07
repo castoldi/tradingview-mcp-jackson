@@ -346,6 +346,8 @@ When the user asks to "review the entries" or "draw the entries on the board", d
 - After a TradingView relaunch a NinjaTrader login popup may open. Close it (never enter credentials); the broker reconnect is the user's to do.
 
 ### "Mark entries" = this exact look (user, 2026-10-06)
+**Standing wording preference (user, 2026-10-07):** "add new trades" (including "now add new trades") always means analyze the current chart and draw new entry plans using the workflow below. Treat it as the same request as "mark entries"; proceed without asking whether the user means recording past trades or drawing plans. This phrase does not authorize placing broker orders or importing executed trades into the journal or Trade Book. Journal the resulting plans as advice.
+
 When the user says "mark entries", "draw the entries" or "where would you enter", do all of this in one go:
 1. Delete the old plan boxes (`draw.js list` / `rm`); keep structural levels.
 2. For each option, `node scripts/draw.js long|short <entry> <sl> <tp> --qty 1 --balance <current balance>`, starting at the last candle and extending RIGHT; two options side by side (first from now, the next starting where the first ends + a few minutes), ~70 min wide each, compact badges, Qty 1.
