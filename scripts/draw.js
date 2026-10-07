@@ -128,7 +128,7 @@ try {
     if (res.entity_id) {
       const riskPct = +((Math.abs(entry - sl) * mult * qty) / balance * 100).toFixed(4);
       readback = await evaluate(`(async function(){ var s = ${KNOWN_PATHS.chartApi}.getShapeById('${res.entity_id}'); var w = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };
-        s.setProperties({ alwaysShowStats:true, showPriceLabels:true, compact:false, riskDisplayMode:'percents' }); await w(300);
+        s.setProperties({ alwaysShowStats:true, showPriceLabels:true, compact:true, fontsize:11, riskDisplayMode:'percents' }); await w(300);
         s.setProperties({ accountSize:${balance} }); await w(300);
         s.setProperties({ lotSize:1 }); await w(300);
         s.setProperties({ risk:${riskPct} }); await w(500);
