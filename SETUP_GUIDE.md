@@ -4,7 +4,7 @@ This file is a step-by-step guide for Claude Code (or any LLM agent) to install 
 
 ## This machine (Windows 11, user: casto)
 
-Already installed at `C:\users\casto\tradingview-mcp-jackson`. Skip to Step 3.
+Already installed at `C:\Data\ai_projects\tradingview-mcp-jackson`. Skip to Step 3.
 
 MCP config needed at: `C:\Users\casto\.claude\.mcp.json`
 TradingView launch: `& "$env:LOCALAPPDATA\TradingView\TradingView.exe" --remote-debugging-port=9222`
@@ -69,7 +69,7 @@ Replace `YOUR_USERNAME`: run `echo $USER` to find it.
   "mcpServers": {
     "tradingview": {
       "command": "node",
-      "args": ["C:\\users\\casto\\tradingview-mcp-jackson\\src\\server.js"]
+      "args": ["C:\\Data\\ai_projects\\tradingview-mcp-jackson\\src\\server.js"]
     }
   }
 }
@@ -152,7 +152,7 @@ cd ~/tradingview-mcp-jackson && npm link
 
 **Windows (PowerShell — run as Administrator):**
 ```powershell
-cd C:\users\casto\tradingview-mcp-jackson
+cd C:\Data\ai_projects\tradingview-mcp-jackson
 npm link
 ```
 
