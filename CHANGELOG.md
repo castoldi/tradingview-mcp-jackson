@@ -4,6 +4,11 @@ Changes to this fork (`castoldi/tradingview-mcp-jackson`), newest first. Upstrea
 
 Format: one `## YYYY-MM-DD` section per day, grouped under **Added / Changed / Fixed / Removed**. Every commit adds its line here (see "Git workflow" in `CLAUDE.md`).
 
+## 2026-10-10
+
+### Added
+- `scripts/trendline-backtest.js`: a no-look-ahead backtest of the Tori Trades trendline bounce on the saved NNQ bars, run with both her stop and ours. `docs/2026-10-10_tori-trades-trendline-bounce.md` (with 6 frames in `docs/assets/`) holds the analysis and results: net-negative after the 14.8-pt fee on every timeframe, so it was not adopted. Pointer added to `CLAUDE.md` (Fibonacci research section).
+
 ## 2026-10-07
 
 ### Added
